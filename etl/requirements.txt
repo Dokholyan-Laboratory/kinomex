@@ -1,0 +1,8 @@
+aiohttp
+motor
+pymongo
+python-dotenv
+asyncio-mqtt
+tenacity
+tqdm
+ratelimit
