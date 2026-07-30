@@ -174,44 +174,59 @@ export default function MutationTable({ mutations }: MutationTableProps) {
   }
 
   return (
-    <div className="glass-card overflow-hidden">
-      <div className="p-4 border-b border-white/5 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-white">
-          Mutations
-          <span className="ml-2 text-slate-500 font-normal">({mutations.length})</span>
-        </h3>
+    <>
+      <div className="glass-card overflow-hidden">
+        <div className="p-4 border-b border-white/5 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-white">
+            Mutations
+            <span className="ml-2 text-slate-500 font-normal">({mutations.length})</span>
+          </h3>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-white/5">
+                <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                  Mutation
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                  Position
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                  Pathogenicity
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                  Associated Diseases
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                  Organ Systems
+                </th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
+                  Drug Resistance
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-white/5">
+              {mutations.map((mutation, idx) => (
+                <ExpandableRow key={`${mutation.mutation_code}-${idx}`} mutation={mutation} index={idx} />
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-white/5">
-              <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
-                Mutation
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
-                Position
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
-                Pathogenicity
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
-                Associated Diseases
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
-                Organ Systems
-              </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">
-                Drug Resistance
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-white/5">
-            {mutations.map((mutation, idx) => (
-              <ExpandableRow key={`${mutation.mutation_code}-${idx}`} mutation={mutation} index={idx} />
-            ))}
-          </tbody>
-        </table>
+      <div className="glass-card px-4 py-3 flex flex-wrap items-center gap-x-4 gap-y-1.5">
+        <span className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">Pathogenicity Legend:</span>
+        {Object.entries(pathogenicityConfig).map(([key, cfg]) => (
+          <span key={key} className="inline-flex items-center gap-1">
+            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${cfg.color}`}>
+              {cfg.label}
+            </span>
+            {key === "variant_of_uncertain_significance" && (
+              <span className="text-[10px] text-slate-400">(Variant of Uncertain Significance)</span>
+            )}
+          </span>
+        ))}
       </div>
-    </div>
+    </>
   );
 }

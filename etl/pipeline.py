@@ -104,10 +104,10 @@ async def _run_pdis() -> int:
 
 async def _run_diseases() -> int:
     from .ingestors.disease_ingestor import fetch_diseases
-    from .database import get_db
+    from .database import get_db, COLLECTIONS
     db = get_db()
     await fetch_diseases(db)
-    return await db.diseases.count_documents({})
+    return await db[COLLECTIONS["diseases"]].count_documents({})
 
 
 STEP_RUNNERS = {

@@ -59,6 +59,10 @@ def _extract_kinase(record: dict[str, Any]) -> dict[str, Any]:
     for kw in record.get("keywords", []):
         keywords.append(kw.get("name", ""))
 
+    # Determine reviewed status (Swiss-Prot vs TrEMBL)
+    entry_type = record.get("entryType", "") or ""
+    reviewed = "swiss-prot" in entry_type.lower()
+
     # Derive kinase group from curated mapping, fallback to keyword heuristic
     group = KINASE_GROUPS.get(gene_symbol, _derive_group(keywords, full_name))
 
@@ -73,6 +77,7 @@ def _extract_kinase(record: dict[str, Any]) -> dict[str, Any]:
         "domain_boundaries": domains,
         "keywords": keywords,
         "group": group,
+        "reviewed": reviewed,
         "source": "uniprot",
     }
 
@@ -80,37 +85,104 @@ def _extract_kinase(record: dict[str, Any]) -> dict[str, Any]:
 def _derive_group(keywords: list[str], full_name: str) -> str:
     """Derive Manning kinase group from UniProt keywords and protein name."""
     kw_lower = [k.lower() for k in keywords]
+    kw_set = set(kw_lower)
     name_lower = full_name.lower()
 
+    # ── TK: Tyrosine kinases ──
     if "tyrosine-protein kinase" in name_lower:
         return "TK"
     if any("tyrosine-protein kinase" in k for k in kw_lower):
         return "TK"
+    if any("receptor tyrosine" in name_lower or k for k in kw_lower if "receptor tyrosine" in k):
+        return "TK"
+    if "tyrosine" in kw_set and "kinase" in kw_set:
+        return "TK"
 
+    # ── TKL: Tyrosine kinase-like ──
     if any("tyrosine kinase-like" in k for k in kw_lower):
         return "TKL"
+    if any(w in name_lower for w in [
+        "activin receptor", "anti-muellerian", "bone morphogenetic",
+        "tgf-beta", "transforming growth factor",
+        "kinase suppressor of ras", "mixed-lineage",
+    ]):
+        return "TKL"
+    if "interleukin-1 receptor-associated" in name_lower:
+        return "TKL"
 
-    if any("cmgc" in k for k in kw_lower):
-        return "CMGC"
-
-    if any("camk" in k for k in kw_lower) or any("calcium/calmodulin" in k for k in kw_lower):
-        return "CAMK"
-
-    if any("agc" in k for k in kw_lower) or any("pkc" in name_lower for _ in [0]):
+    # ── AGC ──
+    if "agc" in kw_set:
+        return "AGC"
+    if any(w in name_lower for w in [
+        "camp-dependent", "cgmp-dependent",
+        "protein kinase c", "protein kinase a", "protein kinase n",
+        "rho-associated", "ribosomal protein s6", "serum/glucocorticoid",
+        "rac-alpha", "rac beta", "rac gamma",
+        "large tumor suppressor", "microtubule-associated serine",
+        "3-phosphoinositide-dependent",
+        "g protein-coupled receptor kinase",
+    ]):
         return "AGC"
 
-    if any("ck1" in k for k in kw_lower) or any("casein kinase" in k for k in kw_lower):
+    # ── CAMK ──
+    if "camk" in kw_set or any("calcium/calmodulin" in k for k in kw_lower):
+        return "CAMK"
+    if any(w in name_lower for w in [
+        "calcium/calmodulin-dependent",
+        "myosin light chain", "myosin heavy chain",
+        "ca2+/calmodulin", "death-associated protein",
+        "map/microtubule affinity", "proto-oncogene serine",
+        "phosphorylase b kinase", "doublecortin",
+        "maternal embryonic leucine zipper",
+    ]):
+        return "CAMK"
+    if any(w in name_lower for w in [
+        "nuak family", "map kinase-interacting", "fas-activated",
+        "striated muscle preferentially expressed",
+    ]):
+        return "CAMK"
+
+    # ── CK1 ──
+    if "ck1" in kw_set or any("casein kinase" in k for k in kw_lower):
+        return "CK1"
+    if "casein kinase i" in name_lower:
         return "CK1"
 
-    if any("ste" in k for k in kw_lower) or any("map kinase" in k for k in kw_lower):
+    # ── STE ──
+    if "ste" in kw_set:
+        return "STE"
+    if any(w in name_lower for w in [
+        "mitogen-activated protein kinase kinase",
+        "map kinase kinase", "p21-activated",
+    ]):
+        return "STE"
+    if any(w in name_lower for w in ["nik-related", "lymphokine-activated killer"]):
         return "STE"
 
-    if "serine/threonine-protein kinase" in name_lower or any("serine/threonine-protein kinase" in k for k in kw_lower):
+    # ── CMGC ──
+    if "cmgc" in kw_set:
+        return "CMGC"
+    if "cyclin-dependent" in name_lower:
+        return "CMGC"
+    if name_lower.startswith("mitogen-activated protein kinase") and "kinase kinase" not in name_lower:
+        return "CMGC"
+    if any(w in name_lower for w in [
+        "glycogen synthase", "casein kinase ii",
+        "dual specificity", "serine/arginine-rich",
+        "cdc2-like", "cyclin-dependent kinase-like",
+        "cdk-like",
+    ]):
+        return "CMGC"
+    if any(w in name_lower for w in [
+        "serine/threonine-protein kinase prp4",
+        "serine/threonine-protein kinase mak",
+        "serine/threonine-protein kinase nek",
+    ]):
         return "CMGC"
 
+    # ── Atypical (fallback for any remaining kinase) ──
     if "kinase" in name_lower or "kinase" in " ".join(kw_lower):
         return "Atypical"
-
     return "Atypical"
 
 

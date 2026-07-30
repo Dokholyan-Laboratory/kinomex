@@ -5,6 +5,8 @@ import logging
 import aiohttp
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
+from ..database import COLLECTIONS
+
 logger = logging.getLogger(__name__)
 
 BATCH_SIZE = 20
@@ -19,7 +21,7 @@ async def fetch_diseases(db: AsyncIOMotorDatabase) -> None:
     kinases = await db.kinases.distinct("uniprot_id")
     logger.info("Found %d kinases with UniProt IDs", len(kinases))
 
-    diseases_col = db.diseases
+    diseases_col = db[COLLECTIONS["diseases"]]
     await diseases_col.drop()
 
     total_inserted = 0

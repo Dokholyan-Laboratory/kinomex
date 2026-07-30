@@ -120,6 +120,16 @@ export default function HomePage() {
       .catch(console.error);
   }, []);
 
+  // Sync URL search param into state (e.g. from nav quick search)
+  useEffect(() => {
+    const urlSearch = searchParams.get("search") || "";
+    if (urlSearch !== search) {
+      setSearch(urlSearch);
+    }
+    // only run on URL change
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
   const fetchKinases = useCallback(
     async (pageNum: number, append: boolean) => {
       if (append) setLoadingMore(true);

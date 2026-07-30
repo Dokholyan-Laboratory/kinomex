@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
 
 interface SearchBarProps {
@@ -17,44 +17,33 @@ export default function SearchBar({
   className,
 }: SearchBarProps) {
   const [value, setValue] = useState(initialValue);
+  const onSearchRef = useRef(onSearch);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const debouncedSearch = useCallback(
-    (query: string) => {
-      if (timerRef.current) {
-        clearTimeout(timerRef.current);
-      }
-      timerRef.current = setTimeout(() => {
-        onSearch(query);
-      }, 300);
-    },
-    [onSearch]
-  );
+  useEffect(() => {
+    onSearchRef.current = onSearch;
+  }, [onSearch]);
 
   useEffect(() => {
     return () => {
-      if (timerRef.current) {
-        clearTimeout(timerRef.current);
-      }
+      if (timerRef.current) clearTimeout(timerRef.current);
     };
   }, []);
 
-  const handleChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const newValue = e.target.value;
-      setValue(newValue);
-      debouncedSearch(newValue);
-    },
-    [debouncedSearch]
-  );
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newValue = e.target.value;
+    setValue(newValue);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
+      onSearchRef.current(newValue);
+    }, 200);
+  };
 
-  const handleClear = useCallback(() => {
+  const handleClear = () => {
     setValue("");
-    onSearch("");
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-    }
-  }, [onSearch]);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    onSearchRef.current("");
+  };
 
   return (
     <div className={cn("relative", className)}>

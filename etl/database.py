@@ -20,6 +20,7 @@ COLLECTIONS = {
     "expression": "expression",
     "variants": "variants",
     "pdis": "pdis",
+    "diseases": "diseases",
 }
 
 

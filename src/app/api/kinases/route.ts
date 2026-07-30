@@ -134,7 +134,9 @@ export async function GET(request: NextRequest) {
     const totalPages = Math.ceil(total / limit);
 
     const response = { kinases: filtered, total, page, totalPages };
-    setCache(cacheKey, response);
+    if (total > 0) {
+      setCache(cacheKey, response);
+    }
 
     return NextResponse.json(response);
   } catch (error) {
