@@ -2,13 +2,25 @@
 
 import { useEffect, useRef, useState } from "react";
 
+const DOMAIN_COLORS = [
+  "#38bdf8", "#34d399", "#a855f7", "#f59e0b", "#f472b6",
+  "#22d3ee", "#fb923c", "#818cf8", "#2dd4bf", "#e879f9",
+];
+
+interface DomainBoundary {
+  name: string;
+  start: number;
+  end: number;
+}
+
 interface NGLViewerProps {
   pdbId?: string | null;
   alphafoldId?: string | null;
+  domains?: DomainBoundary[];
   className?: string;
 }
 
-export default function NGLViewer({ pdbId, alphafoldId, className = "" }: NGLViewerProps) {
+export default function NGLViewer({ pdbId, alphafoldId, domains = [], className = "" }: NGLViewerProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const stageRef = useRef<any>(null);
@@ -46,7 +58,6 @@ export default function NGLViewer({ pdbId, alphafoldId, className = "" }: NGLVie
         if (pdbId) {
           url = `rcsb://${pdbId}`;
         } else if (alphafoldId) {
-          // Fetch the correct CIF URL from AlphaFold API
           const resp = await fetch(`https://alphafold.ebi.ac.uk/api/prediction/${alphafoldId}`);
           const data = await resp.json();
           url = data[0]?.cifUrl;
@@ -62,7 +73,24 @@ export default function NGLViewer({ pdbId, alphafoldId, className = "" }: NGLVie
           return;
         }
 
-        if (pdbId) {
+        if (domains.length > 0) {
+          // Base: thin outline for residues not in any domain
+          result.addRepresentation("backbone", {
+            color: "#1e293b",
+            linewidth: 1,
+          });
+
+          // One cartoon per domain with distinct color
+          domains.forEach((d, i) => {
+            const color = DOMAIN_COLORS[i % DOMAIN_COLORS.length];
+            const sele = `${d.start}-${d.end}`;
+            result.addRepresentation("cartoon", {
+              sele,
+              color,
+              name: d.name,
+            });
+          });
+        } else if (pdbId) {
           result.addRepresentation("cartoon", { color: "spectrum" });
           result.addRepresentation("ball+stick", {
             sele: "hetero and not water",
@@ -92,7 +120,7 @@ export default function NGLViewer({ pdbId, alphafoldId, className = "" }: NGLVie
         stageRef.current = null;
       }
     };
-  }, [pdbId, alphafoldId]);
+  }, [pdbId, alphafoldId, domains]);
 
   return (
     <div className={`relative h-full ${className}`}>

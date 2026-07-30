@@ -10,7 +10,7 @@ const GROUPS: GroupFilter[] = ["All", "AGC", "CAMK", "CK1", "CMGC", "STE", "TK",
 
 const ORGAN_SYSTEMS = [
   "All",
-  "Nervous",
+  "CNS",
   "Cardiovascular",
   "Respiratory",
   "Hepatic",
@@ -19,8 +19,9 @@ const ORGAN_SYSTEMS = [
   "Gastrointestinal",
   "Endocrine",
   "Musculoskeletal",
-  "Integumentary",
-  "Hematopoietic",
+  "Reproductive",
+  "Skin",
+  "Other",
 ];
 
 const groupPillStyles: Record<GroupFilter, string> = {

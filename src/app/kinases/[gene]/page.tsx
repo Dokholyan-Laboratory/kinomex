@@ -72,6 +72,7 @@ interface KinaseDetail {
   organ_systems_impacted: string[];
   diseases_associated: { name: string; description: string; omim_id: string }[];
   pathways?: { reactome_id: string; pathway_name: string; role: string }[];
+  domains?: { name: string; start: number; end: number }[];
 }
 
 const TABS = [
@@ -140,6 +141,7 @@ function NotFound({ gene }: { gene: string }) {
 }
 
 function StructureTab({ kinase, onStructureCount }: { kinase: KinaseDetail; onStructureCount?: (count: number) => void }) {
+  const domains = kinase.domains ?? [];
   const [pdbStructures, setPdbStructures] = useState<Array<{ pdb_id: string; title: string; resolution: number | null; method: string }>>([]);
   const [loadingStructures, setLoadingStructures] = useState(true);
   const [selectedPdb, setSelectedPdb] = useState<string | null>(null);
@@ -229,14 +231,27 @@ function StructureTab({ kinase, onStructureCount }: { kinase: KinaseDetail; onSt
               </div>
             ) : hasPdb ? (
               <div className="rounded-xl overflow-hidden border border-white/5 h-[320px]">
-                <NGLViewer key={selectedPdb} pdbId={selectedPdb} />
+                <NGLViewer key={selectedPdb} pdbId={selectedPdb} domains={domains} />
               </div>
             ) : (
               <div className="rounded-xl overflow-hidden border border-white/5 h-[320px]">
-                <NGLViewer alphafoldId={kinase.uniprot_id} />
+                <NGLViewer alphafoldId={kinase.uniprot_id} domains={domains} />
               </div>
             )}
 
+            {domains.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5">
+                {domains.map((d, i) => {
+                  const colors = ["#38bdf8","#34d399","#a855f7","#f59e0b","#f472b6","#22d3ee","#fb923c","#818cf8","#2dd4bf","#e879f9"];
+                  return (
+                    <span key={d.name} className="inline-flex items-center gap-1.5 text-xs text-slate-400">
+                      <span className="w-2.5 h-2.5 rounded-sm" style={{ background: colors[i % colors.length] }} />
+                      {d.name}
+                    </span>
+                  );
+                })}
+              </div>
+            )}
             <p className="text-xs text-slate-600 mt-3">
               Source: {hasPdb ? `RCSB PDB (Experimental) — ${selectedPdb}` : "AlphaFold Database (AI Prediction)"}
             </p>

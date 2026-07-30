@@ -52,8 +52,26 @@ export async function GET(request: NextRequest) {
       matchStage.group = group;
     }
 
+    // Resolve organ system filter from expression collection
+    let organGenes: string[] | null = null;
     if (organ_system) {
-      matchStage.organ_systems = { $regex: organ_system, $options: "i" };
+      // Map common aliases to database values
+      const organAliases: Record<string, string> = {
+        nervous: "CNS", brain: "CNS", neuronal: "CNS", neural: "CNS",
+        skin: "Skin", dermal: "Skin", integumentary: "Skin",
+        hematopoietic: "Other", blood: "Other", haemato: "Other",
+      };
+      const resolvedOrgan = organAliases[organ_system.toLowerCase()] || organ_system;
+      const expDocs = await db.collection("expression").distinct("gene_symbol", {
+        organ_system: { $regex: resolvedOrgan, $options: "i" },
+      });
+      organGenes = (expDocs || []).filter(Boolean) as string[];
+      if (organGenes.length > 0) {
+        matchStage.gene_symbol = { $in: organGenes };
+      } else {
+        // No kinases match this organ system — return empty
+        return NextResponse.json({ kinases: [], total: 0, page, totalPages: 0 });
+      }
     }
 
     // First get total count from kinases collection
