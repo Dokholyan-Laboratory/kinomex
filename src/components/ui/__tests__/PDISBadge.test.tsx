@@ -3,6 +3,10 @@ import { render, screen } from "@testing-library/react";
 import PDISBadge from "@/components/ui/PDISBadge";
 
 describe("PDISBadge", () => {
+  it("renders unavailable scores without inventing a zero", () => {
+    render(<PDISBadge score={null} />);
+    expect(screen.getByText("N/A")).toBeInTheDocument();
+  });
   it("renders the score formatted to 2 decimals", () => {
     render(<PDISBadge score={0.4567} />);
     expect(screen.getByText("0.46")).toBeInTheDocument();

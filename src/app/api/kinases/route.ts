@@ -87,7 +87,8 @@ export async function GET(request: NextRequest) {
       geneConditions.push({ gene_symbol: { $in: organGenes } });
     }
 
-    if (minPDIS > 0 || maxPDIS < 1) {
+    const hasPdisFilter = searchParams.has("minPDIS") || searchParams.has("maxPDIS");
+    if (hasPdisFilter) {
       // pdis collection stores scores on a 0-100 scale; resolve matching genes
       // BEFORE pagination so totals and pages reflect only in-range kinases.
       const minTotal = Math.round(minPDIS * 100);
@@ -96,13 +97,6 @@ export async function GET(request: NextRequest) {
         .find({ pdis_total: { $gte: minTotal, $lte: maxTotal } })
         .toArray();
       const pdisGenes = new Set((pdisDocs.map((p) => p.gene_symbol)).filter(Boolean) as string[]);
-      if (minPDIS === 0) {
-        // Kinases without a PDIS record score 0 and fall inside [0, maxPDIS].
-        const allGenes = await db.collection("kinases").distinct("gene_symbol");
-        for (const g of allGenes) {
-          if (g && !pdisGenes.has(g)) pdisGenes.add(g);
-        }
-      }
       if (pdisGenes.size === 0) {
         return NextResponse.json({ kinases: [], total: 0, page, totalPages: 0 });
       }
@@ -143,7 +137,9 @@ export async function GET(request: NextRequest) {
     ]);
 
     // Build lookup maps
-    const pdisMap = new Map(pdisDocs.map((p) => [p.gene_symbol, (p.pdis_total || 0) / 100]));
+    const pdisMap = new Map(pdisDocs
+      .filter((p) => Number.isFinite(p.pdis_total))
+      .map((p) => [p.gene_symbol, p.pdis_total / 100]));
     const varCountMap = new Map(varCounts.map((v) => [v._id, v.count]));
     const expMap = new Map(expDocs.map((e) => [e._id, e.systems]));
     const diseaseMap = new Map(diseaseDocs.map((d) => [d.gene_symbol, (d.diseases || []).map((dis: { disease_id: string; description: string; omim_id: string }) => dis.disease_id)]));
@@ -158,7 +154,7 @@ export async function GET(request: NextRequest) {
         subfamily: k.subfamily || "",
         organism: "Human",
         uniprot_id: k.uniprot_id,
-        pdis_score: pdisMap.get(gene) || 0,
+        pdis_score: pdisMap.get(gene) ?? null,
         organ_systems_impacted: (expMap.get(gene) || []),
         diseases_associated: diseaseMap.get(gene) || [],
         mutation_count: varCountMap.get(gene) || 0,

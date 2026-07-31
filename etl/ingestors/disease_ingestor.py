@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import aiohttp
+from datetime import datetime, timezone
 from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from ..database import COLLECTIONS
@@ -22,9 +23,9 @@ async def fetch_diseases(db: AsyncIOMotorDatabase) -> None:
     logger.info("Found %d kinases with UniProt IDs", len(kinases))
 
     diseases_col = db[COLLECTIONS["diseases"]]
-    await diseases_col.drop()
 
-    total_inserted = 0
+    collected_docs: list[dict] = []
+    completed = 0
     sem = asyncio.Semaphore(CONCURRENCY)
 
     async with aiohttp.ClientSession() as session:
@@ -33,7 +34,7 @@ async def fetch_diseases(db: AsyncIOMotorDatabase) -> None:
             if not batch:
                 continue
 
-            async def _limited(uid: str) -> tuple[list, list]:
+            async def _limited(uid: str) -> tuple[str, list[dict], bool]:
                 async with sem:
                     result = await _fetch_entry(session, uid)
                     await asyncio.sleep(UNIPROT_DELAY)
@@ -42,25 +43,33 @@ async def fetch_diseases(db: AsyncIOMotorDatabase) -> None:
             results = await asyncio.gather(*[_limited(uid) for uid in batch])
 
             docs = []
-            for uid, (gene_name, diseases) in zip(batch, results):
+            for uid, (gene_name, diseases, succeeded) in zip(batch, results):
+                if succeeded:
+                    completed += 1
                 if diseases:
                     docs.append({
                         "uniprot_id": uid,
                         "gene_symbol": gene_name,
                         "diseases": diseases,
+                        "source": "uniprot",
+                        "source_url": f"https://rest.uniprot.org/uniprotkb/{uid}",
+                        "retrieved_at": datetime.now(timezone.utc),
                     })
 
             if docs:
-                await diseases_col.insert_many(docs, ordered=False)
-                total_inserted += len(docs)
+                collected_docs.extend(docs)
 
             if (i // BATCH_SIZE) % 20 == 0:
                 logger.info(
                     "Diseases progress: %d/%d kinases, %d with diseases",
-                    i + len(batch), len(kinases), total_inserted,
+                    i + len(batch), len(kinases), len(collected_docs),
                 )
 
-    await diseases_col.create_index("gene_symbol")
+    if completed != len(kinases):
+        raise RuntimeError(f"UniProt disease refresh incomplete: {completed}/{len(kinases)} requests succeeded")
+    await diseases_col.delete_many({"source": {"$in": ["uniprot", None]}})
+    if collected_docs:
+        await diseases_col.insert_many(collected_docs, ordered=False)
     final_count = await diseases_col.count_documents({})
     logger.info("Diseases complete: %d kinases with disease annotations", final_count)
 
@@ -68,13 +77,13 @@ async def fetch_diseases(db: AsyncIOMotorDatabase) -> None:
 async def _fetch_entry(
     session: aiohttp.ClientSession,
     uid: str,
-) -> tuple[str, list[dict]]:
+) -> tuple[str, list[dict], bool]:
     """Fetch a single UniProt entry and extract disease annotations."""
     url = f"https://rest.uniprot.org/uniprotkb/{uid}.json"
     try:
         async with session.get(url, timeout=aiohttp.ClientTimeout(total=15)) as resp:
             if resp.status != 200:
-                return ("", [])
+                return ("", [], False)
             data = await resp.json()
 
         gene_name = ""
@@ -101,7 +110,7 @@ async def _fetch_entry(
                 ),
             })
 
-        return (gene_name, diseases)
+        return (gene_name, diseases, True)
     except Exception as exc:
         logger.debug("Failed to fetch %s: %s", uid, exc)
-        return ("", [])
+        return ("", [], False)

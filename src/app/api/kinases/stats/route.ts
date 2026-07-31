@@ -14,7 +14,7 @@ export async function GET() {
       ]).toArray().catch(() => []),
       db.collection("pdis").aggregate([
         { $group: { _id: null, avg: { $avg: "$pdis_total" } } },
-      ]).toArray().catch(() => [{ avg: 0 }]),
+      ]).toArray().catch(() => []),
       db.collection("variants").countDocuments().catch(() => 0),
       db.collection("structures").countDocuments().catch(() => 0),
       db.collection("diseases").countDocuments().catch(() => 0),
@@ -36,7 +36,7 @@ export async function GET() {
       }
     }
 
-    const averagePDIS = (pdisAgg[0]?.avg ?? 0) / 100;
+    const averagePDIS = Number.isFinite(pdisAgg[0]?.avg) ? pdisAgg[0].avg / 100 : null;
 
     // Resolve group for top druggable kinases
     const druggableGenes = topDruggable.map((d) => d.gene_symbol).filter(Boolean);
@@ -46,7 +46,7 @@ export async function GET() {
     const response = {
       totalKinases,
       groupDistribution,
-      averagePDIS: Math.round(averagePDIS * 1000) / 1000,
+      averagePDIS: averagePDIS === null ? null : Math.round(averagePDIS * 1000) / 1000,
       totalLigands: totalBioactivities,
       totalVariants,
       totalStructures,
@@ -55,12 +55,12 @@ export async function GET() {
         gene_symbol: m._id,
         name: m._id,
         mutation_count: m.count,
-        pdis_score: 0,
+        pdis_score: null,
       })),
       topDruggableKinases: topDruggable.map((d) => ({
         gene_symbol: d.gene_symbol,
         name: d.gene_symbol,
-        pdis_score: (d.pdis_total || 0) / 100,
+        pdis_score: d.pdis_total / 100,
         group: druggableGroupMap.get(d.gene_symbol) || "Atypical",
       })),
     };

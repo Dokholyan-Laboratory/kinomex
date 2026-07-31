@@ -1,0 +1,242 @@
+{
+  "generatedAt": "2026-07-31T21:20:09.887Z",
+  "database": "kinomex",
+  "policy": "Numeric ranges are descriptive; only provenance/pattern evidence marks records synthetic.",
+  "collections": {
+    "bioactivities": {
+      "documents": 3885,
+      "syntheticDocuments": 3885,
+      "sources": [
+        {
+          "source": "dev_seed",
+          "count": 3885
+        }
+      ],
+      "numericFields": {
+        "document_year": {
+          "count": 3885,
+          "finite": 3885,
+          "nonFinite": 0,
+          "min": 2000,
+          "max": 2025
+        },
+        "pchembl_value": {
+          "count": 3885,
+          "finite": 3885,
+          "nonFinite": 0,
+          "min": 4,
+          "max": 10
+        },
+        "pubchem_cid": {
+          "count": 3885,
+          "finite": 3885,
+          "nonFinite": 0,
+          "min": 1001256,
+          "max": 9997859
+        },
+        "standard_value": {
+          "count": 3885,
+          "finite": 3885,
+          "nonFinite": 0,
+          "min": 0.1,
+          "max": 9941.46
+        }
+      },
+      "nonFiniteNumbers": 0
+    },
+    "diseases": {
+      "documents": 508,
+      "syntheticDocuments": 508,
+      "sources": [
+        {
+          "source": "<missing>",
+          "count": 508
+        }
+      ],
+      "numericFields": {},
+      "nonFiniteNumbers": 0
+    },
+    "expression": {
+      "documents": 3265,
+      "syntheticDocuments": 3265,
+      "sources": [
+        {
+          "source": "dev_seed",
+          "count": 3265
+        }
+      ],
+      "numericFields": {
+        "median_tpm": {
+          "count": 3265,
+          "finite": 3265,
+          "nonFinite": 0,
+          "min": 0.1,
+          "max": 499.89
+        },
+        "tau": {
+          "count": 3265,
+          "finite": 3265,
+          "nonFinite": 0,
+          "min": 0.3,
+          "max": 1
+        }
+      },
+      "nonFiniteNumbers": 0
+    },
+    "kinases": {
+      "documents": 508,
+      "syntheticDocuments": 0,
+      "sources": [
+        {
+          "source": "uniprot",
+          "count": 508
+        }
+      ],
+      "numericFields": {
+        "domain_boundaries[].start": {
+          "count": 1443,
+          "finite": 1443,
+          "nonFinite": 0,
+          "min": 1,
+          "max": 34256
+        },
+        "domain_boundaries[].end": {
+          "count": 1443,
+          "finite": 1443,
+          "nonFinite": 0,
+          "min": 24,
+          "max": 34344
+        },
+        "seq_length": {
+          "count": 508,
+          "finite": 508,
+          "nonFinite": 0,
+          "min": 53,
+          "max": 34350
+        }
+      },
+      "nonFiniteNumbers": 0
+    },
+    "pdis": {
+      "documents": 508,
+      "syntheticDocuments": 508,
+      "sources": [
+        {
+          "source": "dev_seed",
+          "count": 508
+        }
+      ],
+      "numericFields": {
+        "components.citation": {
+          "count": 508,
+          "finite": 508,
+          "nonFinite": 0,
+          "min": 10,
+          "max": 100
+        },
+        "components.clinical_trials": {
+          "count": 508,
+          "finite": 508,
+          "nonFinite": 0,
+          "min": 5,
+          "max": 100
+        },
+        "components.structure": {
+          "count": 508,
+          "finite": 508,
+          "nonFinite": 0,
+          "min": 5,
+          "max": 100
+        },
+        "components.patent_proxy": {
+          "count": 508,
+          "finite": 508,
+          "nonFinite": 0,
+          "min": 5,
+          "max": 100
+        },
+        "pdis_total": {
+          "count": 508,
+          "finite": 508,
+          "nonFinite": 0,
+          "min": 12.7,
+          "max": 96.5
+        },
+        "raw_values.pub_count": {
+          "count": 508,
+          "finite": 508,
+          "nonFinite": 0,
+          "min": 61,
+          "max": 4983
+        },
+        "raw_values.trial_count": {
+          "count": 508,
+          "finite": 508,
+          "nonFinite": 0,
+          "min": 0,
+          "max": 200
+        },
+        "raw_values.pdb_count": {
+          "count": 508,
+          "finite": 508,
+          "nonFinite": 0,
+          "min": 0,
+          "max": 50
+        },
+        "raw_values.best_resolution": {
+          "count": 508,
+          "finite": 508,
+          "nonFinite": 0,
+          "min": 1.5,
+          "max": 3.5
+        }
+      },
+      "nonFiniteNumbers": 0
+    },
+    "structures": {
+      "documents": 575,
+      "syntheticDocuments": 575,
+      "sources": [
+        {
+          "source": "dev_seed",
+          "count": 575
+        }
+      ],
+      "numericFields": {
+        "resolution": {
+          "count": 575,
+          "finite": 575,
+          "nonFinite": 0,
+          "min": 1.51,
+          "max": 3.8
+        }
+      },
+      "nonFiniteNumbers": 0
+    },
+    "variants": {
+      "documents": 1522,
+      "syntheticDocuments": 1522,
+      "sources": [
+        {
+          "source": "dev_seed",
+          "count": 1522
+        }
+      ],
+      "numericFields": {
+        "position": {
+          "count": 1522,
+          "finite": 1522,
+          "nonFinite": 0,
+          "min": 100,
+          "max": 1500
+        }
+      },
+      "nonFiniteNumbers": 0
+    }
+  },
+  "totals": {
+    "documents": 10771,
+    "syntheticDocuments": 10263,
+    "nonFiniteNumbers": 0
+  }
+}

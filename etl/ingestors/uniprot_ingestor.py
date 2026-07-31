@@ -2,17 +2,21 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import datetime, timezone
 from typing import Any
 
 import aiohttp
 
 from ..config import settings
-from ..database import COLLECTIONS, batch_upsert
+from ..database import COLLECTIONS, batch_upsert, get_db
 from ..kinase_groups import KINASE_GROUPS
 
 logger = logging.getLogger(__name__)
 
-KINASE_QUERY = "organism_id:9606 AND keyword:KW-0418"
+# Restrict the catalogue to reviewed human entries carrying UniProt's
+# controlled "Protein kinase" keyword.  The previous query also admitted
+# thousands of unreviewed predictions, far outside a defensible kinome set.
+KINASE_QUERY = "organism_id:9606 AND keyword:KW-0418 AND reviewed:true"
 UNIPROT_SEARCH = "/uniprotkb/search"
 
 
@@ -79,6 +83,8 @@ def _extract_kinase(record: dict[str, Any]) -> dict[str, Any]:
         "group": group,
         "reviewed": reviewed,
         "source": "uniprot",
+        "source_url": "https://rest.uniprot.org/uniprotkb/" + uniprot_id,
+        "retrieved_at": datetime.now(timezone.utc),
     }
 
 
@@ -256,5 +262,14 @@ async def ingest_kinases() -> int:
             key_fields=["uniprot_id"],
             batch_size=settings.rate.uniprot_batch_size,
         )
+        # Synchronise only after a complete successful retrieval.  This
+        # removes stale/unreviewed records without risking an empty catalogue
+        # when UniProt is unavailable.
+        db = get_db()
+        valid_ids = [record["uniprot_id"] for record in all_records]
+        await db[COLLECTIONS["kinases"]].delete_many({
+            "source": "uniprot",
+            "uniprot_id": {"$nin": valid_ids},
+        })
     logger.info("UniProt ingestion complete – %d kinase records stored", len(all_records))
     return len(all_records)

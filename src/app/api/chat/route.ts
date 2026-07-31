@@ -37,19 +37,18 @@ const TISSUE_KEYWORDS: Record<string, string> = {
 
 const SYSTEM_PROMPT_BASE = `You are KinomeX AI, a helpful assistant specialized in the human kinome — the complete set of protein kinases encoded in the human genome. You help researchers and students explore kinase data, understand kinase biology, and discover connections between kinases, diseases, tissues, and drugs.
 
-You have access to the KinomeX database which contains kinase data for 501 human kinases.
+You have access to the current KinomeX database snapshot.
 
 DATABASE SCHEMA:
 - gene_symbol (string, e.g. "EGFR", "BRAF", "CDK2") — standard HGNC gene symbol
 - full_name (string, e.g. "Epidermal growth factor receptor")
 - group (string: AGC, CAMK, CK1, CMGC, STE, TK, TKL, Atypical)
 - family (string) — kinase family within the group
-- pdis_score (number, 0-1) — Pathway-Druggability Importance Score
+- pdis_score (number or null, 0-1) — Pharmaceutical Development Interest Score; null means no verified score
 - organ_systems_impacted (string[]) — tissues where the kinase is expressed
 - diseases_associated (string[]) — diseases linked to the kinase
 - mutation_count (number) — number of ClinVar missense variants
 - ligand_count (number) — number of assayed compounds
-- fda_approval_status (boolean) — whether any FDA-approved drug targets this kinase
 
 KINASE GROUPS:
 - TK — Tyrosine Kinases (e.g. EGFR, SRC, ABL1, JAK2, MET)
@@ -61,12 +60,10 @@ KINASE GROUPS:
 - CK1 — Casein Kinase 1 (e.g. CSNK1A1/D1/E)
 - Atypical — atypical kinases (e.g. MTOR, ATM, ATR, CHEK1/2)
 
-PDIS (Pathway-Druggability Importance Score):
-- Ranges 0-1, higher = more therapeutically relevant
-- >0.5: exceptional (highly drugged, strong clinical evidence)
-- >0.3: high druggability relevance
-- >0.15: moderate
-- <0.15: lower (less studied or harder to drug)
+PDIS (Pharmaceutical Development Interest Score):
+- Ranges 0-1 and summarizes verified publication, trial, structure, and compound-diversity evidence.
+- Higher values indicate more recorded development activity, not biological importance or a clinical recommendation.
+- Never infer a zero score from a missing PDIS record; report it as unavailable.
 
 Guidelines:
 - Answer based on the provided context. If the context doesn't have the data, say you don't know rather than guessing.
@@ -200,7 +197,7 @@ async function fetchKinaseContext(
     db.collection("diseases").find({ gene_symbol: { $in: geneSymbols } }).toArray().catch(() => []),
   ]);
 
-  const pdisMap = new Map(pdisDocs.map((p) => [p.gene_symbol, (p.pdis_total || 0) / 100]));
+  const pdisMap = new Map(pdisDocs.filter((p) => Number.isFinite(p.pdis_total)).map((p) => [p.gene_symbol, p.pdis_total / 100]));
   const varCountMap = new Map(varCounts.map((v) => [v._id, v.count]));
   const diseaseMap = new Map(
     diseaseDocs.map((d) => [
@@ -214,7 +211,7 @@ async function fetchKinaseContext(
     full_name: k.full_name,
     group: k.group,
     family: k.family,
-    pdis_score: pdisMap.get(k.gene_symbol) || 0,
+    pdis_score: pdisMap.get(k.gene_symbol) ?? null,
     mutation_count: varCountMap.get(k.gene_symbol) || 0,
     diseases: diseaseMap.get(k.gene_symbol) || [],
   }));

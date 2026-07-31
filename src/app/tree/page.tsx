@@ -8,7 +8,7 @@ type TreeKinase = {
   gene_symbol: string;
   group: string;
   family: string;
-  pdis_score: number;
+  pdis_score: number | null;
   full_name: string;
 };
 
@@ -92,7 +92,7 @@ export default function TreePage() {
           gene_symbol: (k.gene_symbol as string) || "",
           group: (k.group as string) || "",
           family: (k.subfamily as string) || "",
-          pdis_score: (k.pdis_score as number) || 0,
+          pdis_score: typeof k.pdis_score === "number" ? k.pdis_score : null,
           full_name: (k.name as string) || "",
         }));
         setKinases(mapped);
@@ -116,7 +116,7 @@ export default function TreePage() {
           gene_symbol: data.gene_symbol || selectedGene,
           group: data.classification?.group || "",
           family: data.classification?.family || "",
-          pdis_score: data.pdis_score?.overall_score || 0,
+          pdis_score: data.pdis_score?.overall_score ?? null,
           full_name: data.full_name || "",
         });
       })
@@ -294,7 +294,7 @@ export default function TreePage() {
                   <DetailRow label="Full Name" value={selectedKinaseData.full_name} />
                   <DetailRow label="Group" value={selectedKinaseData.group} color={GROUP_COLORS[selectedKinaseData.group]} />
                   <DetailRow label="Family" value={selectedKinaseData.family} />
-                  <DetailRow label="PDIS Score" value={selectedKinaseData.pdis_score.toFixed(2)} color="#34d399" />
+                  <DetailRow label="PDIS Score" value={selectedKinaseData.pdis_score?.toFixed(2) ?? "N/A"} color="#34d399" />
                 </div>
 
                 <div className="mt-8">

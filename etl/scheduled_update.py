@@ -109,7 +109,7 @@ async def scheduled_refresh(step_names: list[str] | None, lease_minutes: int) ->
         failed = [
             name
             for name, result in pipeline_results.items()
-            if not name.startswith("_") and result.get("status") == "failed"
+            if not name.startswith("_") and result.get("status") in {"failed", "skipped"}
         ]
         status = "failed" if failed else "succeeded"
         await _finish_run(token, status, results)

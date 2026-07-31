@@ -48,7 +48,7 @@ interface KinaseListItem {
   name: string;
   group: string;
   subfamily?: string;
-  pdis_score: number;
+  pdis_score: number | null;
   organ_systems_impacted: string[];
   diseases_associated: string[];
   uniprot_id?: string;

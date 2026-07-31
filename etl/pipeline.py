@@ -157,6 +157,19 @@ async def run_pipeline(step_names: list[str] | None = None) -> dict[str, Any]:
         logger.info("STEP: %s – %s", step_name.upper(), label)
         logger.info("=" * 60)
         t0 = time.perf_counter()
+        failed_dependencies = [
+            dep for dep in STEP_DEPENDENCIES.get(step_name, [])
+            if dep in results and results[dep].get("status") != "ok"
+        ]
+        if failed_dependencies:
+            results[step_name] = {
+                "records": 0,
+                "elapsed_s": 0,
+                "status": "skipped",
+                "error": f"Failed prerequisites: {', '.join(failed_dependencies)}",
+            }
+            logger.error("✗ %s skipped because prerequisites failed: %s", step_name, ", ".join(failed_dependencies))
+            continue
         try:
             count = await STEP_RUNNERS[step_name]()
             elapsed = time.perf_counter() - t0
@@ -235,7 +248,7 @@ def main() -> None:
     results = asyncio.run(run_pipeline(steps_to_run))
 
     # Exit with error if any step failed
-    failed = [k for k, v in results.items() if isinstance(v, dict) and v.get("status") == "failed"]
+    failed = [k for k, v in results.items() if isinstance(v, dict) and v.get("status") in {"failed", "skipped"}]
     if failed:
         sys.exit(1)
 

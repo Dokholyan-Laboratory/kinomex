@@ -1,4 +1,4 @@
-"""Check if the database is populated; if not, seed essential data and fast dev mock data."""
+"""Ensure canonical kinase metadata exists without inventing scientific data."""
 import asyncio
 import logging
 import re
@@ -9,7 +9,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from etl.database import COLLECTIONS, connect, disconnect, get_db
 from etl.pipeline import run_pipeline
-from etl.dev_seed import seed_bioactivities, seed_variants, seed_diseases, seed_expression, seed_pdis, seed_structures
 from etl.kinase_groups import KINASE_GROUPS
 
 _UNIPROT_ACC_RE = re.compile(r"^[OPQ][0-9][A-Z0-9]{3}[0-9]$|^[A-NR-Z][0-9][A-Z][A-Z0-9]{2}[0-9]$")
@@ -131,36 +130,22 @@ async def main() -> None:
     if trimmed:
         logger.info("Removed %d non-canonical Atypical entries (metabolic kinases, AKAPs, etc.)", trimmed)
 
-    seed_collections = ["bioactivities", "variants", "diseases", "expression", "pdis", "structures"]
-    coll_counts = {c: await db[c].count_documents({}) for c in seed_collections}
-    missing = [c for c in seed_collections if coll_counts[c] == 0]
-
-    if not missing:
-        logger.info("Database already fully populated (%d kinases) — skipping", await db[COLLECTIONS["kinases"]].count_documents({}))
-        await disconnect()
-        return
-
-    logger.info("Missing collections: %s — seeding", ", ".join(missing))
-
-    gene_symbols = await db[COLLECTIONS["kinases"]].distinct("gene_symbol")
-    gene_symbols = [g for g in gene_symbols if g]
-
-    seed_fns = {
-        "bioactivities": seed_bioactivities,
-        "variants": seed_variants,
-        "diseases": seed_diseases,
-        "expression": seed_expression,
-        "pdis": seed_pdis,
-        "structures": seed_structures,
+    scientific_collections = [
+        "bioactivities", "variants", "diseases", "expression", "pdis", "structures"
+    ]
+    coll_counts = {
+        name: await db[name].count_documents({}) for name in scientific_collections
     }
-    for c in seed_collections:
-        fn = seed_fns[c]
-        if coll_counts[c] == 0:
-            await fn(db, gene_symbols)
-        else:
-            logger.info("%s already has %d records — skipped", c, coll_counts[c])
+    missing = [name for name, count in coll_counts.items() if count == 0]
+    if missing:
+        logger.warning(
+            "Verified data absent from collections: %s. Run `python -m etl.pipeline` "
+            "to retrieve authoritative records; synthetic fallback data is disabled.",
+            ", ".join(missing),
+        )
+    else:
+        logger.info("All scientific collections contain data; no startup writes needed")
 
-    logger.info("Database fully seeded — dev server ready")
     await disconnect()
 
 

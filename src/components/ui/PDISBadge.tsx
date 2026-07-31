@@ -7,7 +7,7 @@ import { getScoreColor } from "@/lib/kinase-utils";
 type BadgeSize = "sm" | "md" | "lg";
 
 interface PDISBadgeProps {
-  score: number;
+  score: number | null;
   size?: BadgeSize;
 }
 
@@ -40,9 +40,11 @@ const sizeConfig: Record<
 
 export default function PDISBadge({ score, size = "md" }: PDISBadgeProps) {
   const config = sizeConfig[size];
-  const color = getScoreColor(score);
+  const hasScore = score !== null && Number.isFinite(score);
+  const numericScore = hasScore ? score : 0;
+  const color = hasScore ? getScoreColor(numericScore) : "#64748b";
   const circumference = 2 * Math.PI * config.radius;
-  const dashOffset = circumference - Math.min(score, 1) * circumference;
+  const dashOffset = circumference - Math.min(numericScore, 1) * circumference;
   const center = (config.radius * 2 + config.stroke * 2) / 2;
 
   return (
@@ -61,7 +63,7 @@ export default function PDISBadge({ score, size = "md" }: PDISBadgeProps) {
           strokeWidth={config.stroke}
         />
         {/* Animated score ring */}
-        <motion.circle
+        {hasScore && <motion.circle
           cx={center}
           cy={center}
           r={config.radius}
@@ -73,7 +75,7 @@ export default function PDISBadge({ score, size = "md" }: PDISBadgeProps) {
           initial={{ strokeDashoffset: circumference }}
           animate={{ strokeDashoffset: dashOffset }}
           transition={{ duration: 1, ease: "easeOut", delay: 0.2 }}
-        />
+        />}
         {/* Glow filter */}
         <defs>
           <filter id={`glow-${size}`} x="-50%" y="-50%" width="200%" height="200%">
@@ -84,7 +86,7 @@ export default function PDISBadge({ score, size = "md" }: PDISBadgeProps) {
             </feMerge>
           </filter>
         </defs>
-        <motion.circle
+        {hasScore && <motion.circle
           cx={center}
           cy={center}
           r={config.radius}
@@ -98,7 +100,7 @@ export default function PDISBadge({ score, size = "md" }: PDISBadgeProps) {
           transition={{ duration: 1, ease: "easeOut", delay: 0.2 }}
           opacity={0.3}
           filter={`url(#glow-${size})`}
-        />
+        />}
       </svg>
       <span
         className={cn(
@@ -107,7 +109,7 @@ export default function PDISBadge({ score, size = "md" }: PDISBadgeProps) {
         )}
         style={{ color }}
       >
-        {score.toFixed(2)}
+        {hasScore ? numericScore.toFixed(2) : "N/A"}
       </span>
     </div>
   );

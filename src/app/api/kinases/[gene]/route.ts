@@ -97,22 +97,23 @@ export async function GET(
         subfamily: kinaseDoc.subfamily || "",
         family: "",
       },
-      pdis_score: {
-        overall_score: (pdisDoc?.pdis_total || 0) / 100,
-        citation_component: pdisDoc?.components?.citation || 0,
-        clinical_component: pdisDoc?.components?.clinical_trials || 0,
-        structure_component: pdisDoc?.components?.structure || 0,
-        patent_component: pdisDoc?.components?.patent_proxy || 0,
-        fda_approval_status: pdisDoc?.components?.fda_approved ? "FDA Approved" : "Not FDA Approved",
-      },
+      pdis_score: pdisDoc && Number.isFinite(pdisDoc.pdis_total) ? {
+        overall_score: pdisDoc.pdis_total / 100,
+        citation_component: finiteOrNull(pdisDoc.components?.citation),
+        clinical_component: finiteOrNull(pdisDoc.components?.clinical_trials),
+        structure_component: finiteOrNull(pdisDoc.components?.structure),
+        compound_diversity_component: finiteOrNull(pdisDoc.components?.compound_diversity),
+        formula_version: pdisDoc.formula_version || null,
+        raw_values: pdisDoc.raw_values || null,
+        retrieved_at: pdisDoc.retrieved_at || null,
+      } : null,
       pathways: [],
       tissue_expressions: expression.map((e) => ({
         tissue_name: e.tissue_site,
         tpm_value: e.median_tpm,
         organ_system: e.organ_system,
         tau_specificity: e.tau,
-        protein_abundance: e.median_tpm > 80 ? "High" : e.median_tpm > 40 ? "Medium" : "Low",
-        data_source: e.source || "curated",
+        data_source: e.source || null,
       })),
       mutations: variants.map((v) => ({
         mutation_code: v.mutation_code,
@@ -123,13 +124,12 @@ export async function GET(
           if (typeof mc === "string") {
             return parseMutationCode(mc).position;
           }
-          return 0;
+          return null;
         })(),
         pathogenicity: v.pathogenicity === "Pathogenic" ? "pathogenic" : v.pathogenicity === "Uncertain Significance" ? "variant_of_uncertain_significance" : v.pathogenicity.toLowerCase().replace(/\s+/g, "_"),
         associated_diseases: v.drug_resistance_context ? [v.drug_resistance_context] : [],
         drug_resistance_effects: v.drug_resistance_context ? [{
           drug_name: v.drug_resistance_context,
-          fold_resistance: 0,
           mechanism: v.is_gatekeeper ? "gatekeeper" : "resistance",
         }] : [],
         organ_systems_affected: [],
@@ -140,7 +140,7 @@ export async function GET(
         pubmed_id: v.pubmed_id,
       })),
       ligand_assays: bioactivities.map((b) => {
-        let valueNm = typeof b.standard_value === "number" ? b.standard_value : parseFloat(b.standard_value) || 0;
+        let valueNm = typeof b.standard_value === "number" ? b.standard_value : parseFloat(b.standard_value);
         const units = (b.standard_units || "").toLowerCase();
         if (units.includes("nm")) { /* already nM */ }
         else if (units.includes("um") || units.includes("µm")) valueNm *= 1000;
@@ -153,7 +153,7 @@ export async function GET(
           pubchem_cid: b.pubchem_cid || null,
           binding_type: b.binding_type || b.assay_type || "",
           assay_type: b.assay_type || "",
-          value_nm: valueNm,
+          value_nm: Number.isFinite(valueNm) ? valueNm : null,
           relation: b.standard_relation || "=",
           target_conformation: "",
           source: b.source || "chembl",
@@ -181,7 +181,9 @@ export async function GET(
       })),
       domains: kinaseDoc.domain_boundaries || [],
       protein_sequence: kinaseDoc.protein_sequence || "",
-      seq_length: kinaseDoc.seq_length || 0,
+      seq_length: Number.isFinite(kinaseDoc.seq_length)
+        ? kinaseDoc.seq_length
+        : (kinaseDoc.protein_sequence?.length || null),
       ec_number: kinaseDoc.ec_number || "",
       keywords: kinaseDoc.keywords || [],
     };
@@ -194,6 +196,10 @@ export async function GET(
       { status: 500 }
     );
   }
+}
+
+function finiteOrNull(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

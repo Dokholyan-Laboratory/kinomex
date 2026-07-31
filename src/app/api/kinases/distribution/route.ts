@@ -80,14 +80,16 @@ export async function GET(request: NextRequest) {
           scoreMap.set(p.gene_symbol, p.pdis_total);
         }
       }
-      for (const gene of genes) {
-        const score = scoreMap.get(gene) ?? 0;
+      for (const score of Array.from(scoreMap.values())) {
         const idx = Math.min(NUM_BUCKETS - 1, Math.max(0, Math.floor(score / BUCKET_WIDTH)));
         buckets[idx].count += 1;
       }
+      const response = { buckets, total: scoreMap.size, unscored: genes.length - scoreMap.size };
+      setCache(cacheKey, response);
+      return NextResponse.json(response);
     }
 
-    const response = { buckets, total: genes.length };
+    const response = { buckets, total: 0, unscored: 0 };
     setCache(cacheKey, response);
 
     return NextResponse.json(response);

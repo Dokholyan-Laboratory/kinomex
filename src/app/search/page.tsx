@@ -17,12 +17,11 @@ interface SearchResult {
   gene_symbol: string;
   name: string;
   group: string;
-  pdis_score: number;
+  pdis_score: number | null;
   ligand_count?: number;
   mutation_count?: number;
   disease_count?: number;
   organ_systems_impacted: string[];
-  fda_approval_status?: string;
 }
 
 interface ParsedFilters {
@@ -67,7 +66,7 @@ function SearchPageContent() {
     const sorted = [...results];
     switch (sortBy) {
       case "pdis":
-        sorted.sort((a, b) => b.pdis_score - a.pdis_score);
+        sorted.sort((a, b) => (b.pdis_score ?? -1) - (a.pdis_score ?? -1));
         break;
       case "name":
         sorted.sort((a, b) => a.name.localeCompare(b.name));
@@ -146,7 +145,7 @@ function SearchPageContent() {
             gene_symbol: data.gene_symbol || gene,
             name: data.full_name || "",
             group: data.classification?.group || "",
-            pdis_score: data.pdis_score?.overall_score || 0,
+            pdis_score: data.pdis_score?.overall_score ?? null,
             ligand_count: data.ligand_assays?.length || 0,
             mutation_count: data.mutations?.length || 0,
             disease_count: data.diseases_associated?.length || 0,
@@ -403,11 +402,6 @@ function SearchPageContent() {
                             {result.gene_symbol}
                           </a>
                           <span className="text-xs text-slate-500 bg-white/5 px-2 py-0.5 rounded-full">{result.group}</span>
-                          {result.fda_approval_status && (
-                            <span className="text-xs text-kinome-emerald bg-kinome-emerald/10 px-2 py-0.5 rounded-full border border-kinome-emerald/20">
-                              FDA Approved
-                            </span>
-                          )}
                         </div>
                         <p className="text-sm text-slate-400 line-clamp-1 mb-2">{result.name}</p>
                         <div className="flex flex-wrap gap-3 text-xs text-slate-500">
@@ -435,7 +429,7 @@ function SearchPageContent() {
                         <div className="relative w-12 h-12">
                           <svg className="w-full h-full -rotate-90" viewBox="0 0 48 48">
                             <circle cx="24" cy="24" r="20" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="4" />
-                            <circle
+                            {result.pdis_score !== null && <circle
                               cx="24"
                               cy="24"
                               r="20"
@@ -445,10 +439,10 @@ function SearchPageContent() {
                               strokeLinecap="round"
                               strokeDasharray={2 * Math.PI * 20}
                               strokeDashoffset={2 * Math.PI * 20 - (result.pdis_score) * 2 * Math.PI * 20}
-                            />
+                            />}
                           </svg>
                           <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-white">
-                            {result.pdis_score.toFixed(2)}
+                            {result.pdis_score?.toFixed(2) ?? "N/A"}
                           </span>
                         </div>
                         {isSelected && (
@@ -514,7 +508,7 @@ function SearchPageContent() {
                     <tbody className="divide-y divide-white/5">
                       <ComparisonRow label="Full Name" values={compareData.map((k) => k.name)} />
                       <ComparisonRow label="Group" values={compareData.map((k) => k.group)} />
-                      <ComparisonRow label="PDIS Score" values={compareData.map((k) => k.pdis_score.toFixed(2))} highlight />
+                      <ComparisonRow label="PDIS Score" values={compareData.map((k) => k.pdis_score?.toFixed(2) ?? "N/A")} highlight />
                       <ComparisonRow
                         label="Tissues"
                         values={compareData.map((k) => k.organ_systems_impacted.slice(0, 3).join(", ") || "\u2014")}

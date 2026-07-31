@@ -40,7 +40,7 @@ interface Disease {
 interface SummaryData {
   gene_symbol: string;
   name: string;
-  pdis_score?: { overall_score: number };
+  pdis_score?: { overall_score: number } | null;
   classification: { group: string; family: string; subfamily: string };
   domains?: Domain[];
   tissue_expressions: TissueExpression[];

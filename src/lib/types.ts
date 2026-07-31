@@ -98,8 +98,7 @@ export interface PDISScore {
   citation_component: number;
   clinical_component: number;
   structure_component: number;
-  patent_component: number;
-  fda_approval_status: string;
+  compound_diversity_component: number | null;
 }
 
 export interface Classification {
@@ -116,7 +115,7 @@ export interface IKinase extends Document {
   full_name: string;
   ec_number?: string;
   classification: Classification;
-  pdis_score: PDISScore;
+  pdis_score: PDISScore | null;
   pathways: Pathway[];
   organ_systems_impacted: string[];
   diseases_associated: string[];

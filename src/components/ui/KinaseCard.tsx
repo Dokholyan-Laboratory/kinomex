@@ -9,7 +9,7 @@ interface Kinase {
   gene_symbol: string;
   full_name: string;
   classification: string;
-  pdis_score: number;
+  pdis_score: number | null;
   organ_systems_impacted: string[];
   diseases_associated: string[];
 }

@@ -62,8 +62,7 @@ class RateLimitConfig:
     pdis_w_citation: float = 0.30
     pdis_w_clinical: float = 0.30
     pdis_w_structure: float = 0.15
-    pdis_w_patent: float = 0.15
-    pdis_w_fda: float = 0.10
+    pdis_w_compound_diversity: float = 0.15
     pdis_clinical_target: int = 100  # normalisation target for clinical trials
 
 

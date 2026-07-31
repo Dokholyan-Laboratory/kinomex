@@ -85,11 +85,15 @@ export async function POST(request: NextRequest) {
 
     // Get PDIS scores
     const geneSymbols = uniqueKinases.map((k) => k.gene_symbol).filter(Boolean);
-    const [pdisDocs, varCounts, diseaseDocs, expDocs] = await Promise.all([
+    const [pdisDocs, varCounts, ligandCounts, diseaseDocs, expDocs] = await Promise.all([
       db.collection("pdis").find({ gene_symbol: { $in: geneSymbols } }).toArray(),
       db.collection("variants").aggregate([
         { $match: { gene_symbol: { $in: geneSymbols } } },
         { $group: { _id: "$gene_symbol", count: { $sum: 1 } } },
+      ]).toArray().catch(() => []),
+      db.collection("bioactivities").aggregate([
+        { $match: { target_gene_symbol: { $in: geneSymbols } } },
+        { $group: { _id: "$target_gene_symbol", compounds: { $addToSet: "$compound_id" } } },
       ]).toArray().catch(() => []),
       db.collection("diseases").find({ gene_symbol: { $in: geneSymbols } }).toArray().catch(() => []),
       db.collection("expression").aggregate([
@@ -98,8 +102,9 @@ export async function POST(request: NextRequest) {
       ]).toArray().catch(() => []),
     ]);
 
-    const pdisMap = new Map(pdisDocs.map((p) => [p.gene_symbol, (p.pdis_total || 0) / 100]));
+    const pdisMap = new Map(pdisDocs.filter((p) => Number.isFinite(p.pdis_total)).map((p) => [p.gene_symbol, p.pdis_total / 100]));
     const varCountMap = new Map(varCounts.map((v) => [v._id, v.count]));
+    const ligandCountMap = new Map(ligandCounts.map((v) => [v._id, v.compounds.filter(Boolean).length]));
     const diseaseMap = new Map(diseaseDocs.map((d) => [d.gene_symbol, (d.diseases || []).map((dis: { disease_id: string }) => dis.disease_id)]));
     const expMap = new Map(expDocs.map((e) => [e._id, e.systems]));
 
@@ -108,20 +113,19 @@ export async function POST(request: NextRequest) {
       name: k.full_name || "Unknown",
       group: k.group || "Atypical",
       subfamily: k.subfamily || "",
-      pdis_score: pdisMap.get(k.gene_symbol) || 0,
-      ligand_count: 0,
+      pdis_score: pdisMap.get(k.gene_symbol) ?? null,
+      ligand_count: ligandCountMap.get(k.gene_symbol) ?? 0,
       mutation_count: varCountMap.get(k.gene_symbol) || 0,
       disease_count: (diseaseMap.get(k.gene_symbol) || []).length,
       organ_systems_impacted: (expMap.get(k.gene_symbol) || []),
-      fda_approval_status: false,
     }));
 
     // Apply PDIS filter
     if (filters.minPdis !== null) {
-      enriched = enriched.filter((k) => k.pdis_score >= filters.minPdis!);
+      enriched = enriched.filter((k) => k.pdis_score !== null && k.pdis_score >= filters.minPdis!);
     }
     if (filters.maxPdis !== null) {
-      enriched = enriched.filter((k) => k.pdis_score <= filters.maxPdis!);
+      enriched = enriched.filter((k) => k.pdis_score !== null && k.pdis_score <= filters.maxPdis!);
     }
 
     // Sort: disease matches first, then exact gene match, then by PDIS descending
@@ -157,7 +161,7 @@ export async function POST(request: NextRequest) {
 
       if (aExact !== bExact) return bExact - aExact;
 
-      return b.pdis_score - a.pdis_score;
+      return (b.pdis_score ?? -1) - (a.pdis_score ?? -1);
     });
 
     enriched = enriched.slice(0, 50);

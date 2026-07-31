@@ -53,11 +53,10 @@ interface LigandAssay {
 
 interface PDISScore {
   overall_score: number;
-  citation_component: number;
-  clinical_component: number;
-  structure_component: number;
-  patent_component: number;
-  fda_approval_status: string;
+  citation_component: number | null;
+  clinical_component: number | null;
+  structure_component: number | null;
+  compound_diversity_component: number | null;
 }
 
 interface KinaseDetail {
@@ -66,7 +65,7 @@ interface KinaseDetail {
   uniprot_id: string;
   ec_number?: string;
   classification: { group: string; family: string; subfamily: string };
-  pdis_score: PDISScore;
+  pdis_score: PDISScore | null;
   tissue_expressions: TissueExpression[];
   mutations: MutationData[];
   ligand_assays: LigandAssay[];
@@ -770,7 +769,7 @@ export default function KinaseDetailPage() {
           {/* PDIS Score */}
           <div className="flex-shrink-0">
             <div className="glass-card p-4 flex flex-col items-center gap-2">
-              <PDISBadge score={kinase.pdis_score.overall_score} size="lg" />
+              <PDISBadge score={kinase.pdis_score?.overall_score ?? null} size="lg" />
               <span className="text-xs text-slate-500 font-medium">PDIS Score</span>
             </div>
           </div>
@@ -796,6 +795,5 @@ export default function KinaseDetailPage() {
     </div>
   );
 }
-
 
 

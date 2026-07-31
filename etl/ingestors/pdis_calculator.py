@@ -1,46 +1,37 @@
+"""Calculate PDIS exclusively from retrieved, provenance-bearing evidence."""
 from __future__ import annotations
 
 import asyncio
 import logging
 import math
+from datetime import datetime, timezone
 from typing import Any
 
 import aiohttp
-from tenacity import retry, stop_after_attempt, wait_exponential
 
 from ..config import settings
 from ..database import COLLECTIONS, batch_upsert, get_db
 
 logger = logging.getLogger(__name__)
+FORMULA_VERSION = "2.0-evidence-only"
 
 
-# ---------------------------------------------------------------------------
-# Component calculators
-# ---------------------------------------------------------------------------
-
-def _citation_component(pub_count: int, lmax: int) -> float:
-    if lmax <= 0:
+def _log_component(count: int, maximum: int) -> float:
+    if count <= 0 or maximum <= 0:
         return 0.0
-    if pub_count <= 0:
-        return 0.0
-    return math.log10(pub_count + 1) / math.log10(lmax + 1) * 100.0
+    return math.log10(count + 1) / math.log10(maximum + 1) * 100.0
 
 
 def _clinical_component(trial_count: int, target: int) -> float:
-    return min(100.0, (trial_count / max(target, 1)) * 100.0)
+    return min(100.0, trial_count / max(target, 1) * 100.0)
 
 
-def _structure_component(avg_resolution: float | None, best_res: float | None) -> float:
-    if avg_resolution is None or best_res is None:
+def _structure_component(avg_resolution: float | None, best_resolution: float | None) -> float:
+    if avg_resolution is None or best_resolution is None:
         return 0.0
-    if best_res <= 1.5:
-        score_res = 100.0
-    elif best_res >= 4.0:
-        score_res = 0.0
-    else:
-        score_res = (4.0 - best_res) / (4.0 - 1.5) * 100.0
-    avg_score = max(0.0, min(100.0, (4.0 - avg_resolution) / (4.0 - 1.5) * 100.0))
-    return 0.6 * score_res + 0.4 * avg_score
+    best_score = max(0.0, min(100.0, (4.0 - best_resolution) / 2.5 * 100.0))
+    average_score = max(0.0, min(100.0, (4.0 - avg_resolution) / 2.5 * 100.0))
+    return 0.6 * best_score + 0.4 * average_score
 
 
 async def _fetch_pubmed_count(
@@ -57,166 +48,173 @@ async def _fetch_pubmed_count(
     if settings.api.pubmed_api_key:
         params["api_key"] = settings.api.pubmed_api_key
     async with semaphore:
-        await asyncio.sleep(1 / settings.rate.ncbi_rps)
+        await asyncio.sleep(1 / max(settings.rate.ncbi_rps, 1))
         async with session.get(
-            f"{settings.api.ncbi_eutils_url}/esearch.fcgi",
-            params=params,
-        ) as resp:
-            resp.raise_for_status()
-            data = await resp.json()
-    return int(data.get("esearchresult", {}).get("count", 0))
+            f"{settings.api.ncbi_eutils_url}/esearch.fcgi", params=params
+        ) as response:
+            response.raise_for_status()
+            payload = await response.json()
+    return int(payload["esearchresult"]["count"])
 
 
-async def _fetch_clinicaltrials_count(
+async def _fetch_clinical_trial_count(
     session: aiohttp.ClientSession,
     gene: str,
     semaphore: asyncio.Semaphore,
 ) -> int:
     params = {
         "query.term": f"{gene} kinase inhibitor",
-        "filter.overallStatus": "RECRUITING|ACTIVE_NOT_RECRUITING|COMPLETED|ENROLLING_BY_INVITATION",
+        "filter.overallStatus": (
+            "RECRUITING|ACTIVE_NOT_RECRUITING|COMPLETED|ENROLLING_BY_INVITATION"
+        ),
         "countTotal": "true",
         "pageSize": "1",
     }
     async with semaphore:
-        await asyncio.sleep(1 / settings.rate.ncbi_rps)
-        try:
-            async with session.get(
-                "https://clinicaltrials.gov/api/v2/studies",
-                params=params,
-            ) as resp:
-                resp.raise_for_status()
-                data = await resp.json()
-                return int(data.get("totalCount", 0))
-        except Exception:
-            return 0
+        await asyncio.sleep(1 / max(settings.rate.ncbi_rps, 1))
+        async with session.get(
+            "https://clinicaltrials.gov/api/v2/studies", params=params
+        ) as response:
+            response.raise_for_status()
+            payload = await response.json()
+    return int(payload["totalCount"])
 
-
-# ---------------------------------------------------------------------------
-# Main ingestor
-# ---------------------------------------------------------------------------
 
 async def ingest_pdis() -> int:
-    """Calculate PDIS only for known kinases (from group mapping)."""
-    logger.info("Starting PDIS calculation")
+    logger.info("Starting evidence-only PDIS calculation (%s)", FORMULA_VERSION)
     db = get_db()
-    sem = asyncio.Semaphore(settings.rate.ncbi_rps)
-    cfg = settings.rate
 
-    # Load known kinases from group mapping (fast, ~518 genes)
-    known_kinase_docs: list[dict[str, Any]] = []
-    async for doc in db[COLLECTIONS["kinases"]].find(
-        {"group": {"$exists": True, "$ne": None, "$ne": ""}},
-        {"gene_symbol": 1, "_id": 0},
-    ):
-        gs = doc.get("gene_symbol", "")
-        if gs:
-            known_kinase_docs.append(doc)
+    synthetic_counts = {
+        "structures": await db[COLLECTIONS["structures"]].count_documents({"source": "dev_seed"}),
+        "bioactivities": await db[COLLECTIONS["bioactivities"]].count_documents({"source": "dev_seed"}),
+    }
+    if any(synthetic_counts.values()):
+        raise RuntimeError(f"PDIS refused synthetic upstream records: {synthetic_counts}")
+    verified_upstream = {
+        "structures": await db[COLLECTIONS["structures"]].count_documents({"source": "rcsb"}),
+        "bioactivities": await db[COLLECTIONS["bioactivities"]].count_documents({
+            "source": {"$in": ["chembl", "pubchem"]}
+        }),
+    }
+    if not all(verified_upstream.values()):
+        raise RuntimeError(
+            "PDIS requires completed verified structure and bioactivity imports; "
+            f"available records: {verified_upstream}"
+        )
 
-    logger.info("Calculating PDIS for %d known kinases", len(known_kinase_docs))
+    genes = sorted(
+        gene
+        for gene in await db[COLLECTIONS["kinases"]].distinct("gene_symbol", {"source": "uniprot"})
+        if gene
+    )
+    if not genes:
+        raise RuntimeError("No UniProt-sourced kinase genes are available")
 
-    # Aggregate structure stats
-    pipeline = [
+    structure_stats: dict[str, dict[str, Any]] = {}
+    async for row in db[COLLECTIONS["structures"]].aggregate([
+        {"$match": {"source": "rcsb"}},
+        {"$unwind": "$gene_symbols"},
         {"$group": {
-            "_id": "$gene_symbol",
+            "_id": "$gene_symbols",
             "pdb_count": {"$sum": 1},
             "avg_resolution": {"$avg": "$resolution"},
             "best_resolution": {"$min": "$resolution"},
-        }}
-    ]
-    struct_stats: dict[str, dict[str, Any]] = {}
-    async for doc in db[COLLECTIONS["structures"]].aggregate(pipeline):
-        gs = doc.get("_id", "")
-        if gs:
-            struct_stats[gs] = {
-                "pdb_count": doc.get("pdb_count", 0),
-                "avg_resolution": doc.get("avg_resolution"),
-                "best_resolution": doc.get("best_resolution"),
-            }
+        }},
+    ]):
+        structure_stats[str(row["_id"])] = row
 
-    # Fetch publication counts in parallel batches
-    gene_pubcounts: dict[str, int] = {}
-    gene_list = [doc["gene_symbol"] for doc in known_kinase_docs if doc.get("gene_symbol")]
+    compound_counts: dict[str, int] = {}
+    async for row in db[COLLECTIONS["bioactivities"]].aggregate([
+        {"$match": {
+            "source": {"$in": ["chembl", "pubchem"]},
+            "target_gene_symbol": {"$in": genes},
+            "compound_id": {"$nin": [None, ""]},
+        }},
+        {"$group": {"_id": "$target_gene_symbol", "compounds": {"$addToSet": "$compound_id"}}},
+        {"$project": {"count": {"$size": "$compounds"}}},
+    ]):
+        compound_counts[str(row["_id"])] = int(row["count"])
 
-    # Batch PubMed queries (10 concurrent)
-    pub_sem = asyncio.Semaphore(10)
-    async with aiohttp.ClientSession() as session:
-        async def fetch_pub(gene: str) -> tuple[str, int]:
+    timeout = aiohttp.ClientTimeout(total=45)
+    semaphore = asyncio.Semaphore(max(settings.rate.ncbi_rps, 1))
+    evidence: dict[str, tuple[int, int]] = {}
+    failures: dict[str, str] = {}
+
+    async with aiohttp.ClientSession(timeout=timeout) as session:
+        async def retrieve(gene: str) -> None:
             try:
-                count = await _fetch_pubmed_count(session, gene, sem)
-                return gene, count
-            except Exception:
-                return gene, 0
+                publication_count, trial_count = await asyncio.gather(
+                    _fetch_pubmed_count(session, gene, semaphore),
+                    _fetch_clinical_trial_count(session, gene, semaphore),
+                )
+                evidence[gene] = (publication_count, trial_count)
+            except Exception as exc:
+                failures[gene] = str(exc)
 
-        tasks = [fetch_pub(g) for g in gene_list]
-        results = await asyncio.gather(*tasks)
-        for gene, count in results:
-            gene_pubcounts[gene] = count
+        for offset in range(0, len(genes), 25):
+            await asyncio.gather(*(retrieve(gene) for gene in genes[offset : offset + 25]))
 
-    lmax = max(gene_pubcounts.values()) if gene_pubcounts else 1
-
-    # Fetch clinical trial counts in parallel batches
-    gene_trialcounts: dict[str, int] = {}
-    trial_sem = asyncio.Semaphore(10)
-    async with aiohttp.ClientSession() as session:
-        async def fetch_trial(gene: str) -> tuple[str, int]:
-            try:
-                count = await _fetch_clinicaltrials_count(session, gene, sem)
-                return gene, count
-            except Exception:
-                return gene, 0
-
-        tasks = [fetch_trial(g) for g in gene_list]
-        results = await asyncio.gather(*tasks)
-        for gene, count in results:
-            gene_trialcounts[gene] = count
-
-    # Compute PDIS
-    pdis_records: list[dict[str, Any]] = []
-    for gs in gene_list:
-        pub_count = gene_pubcounts.get(gs, 0)
-        trial_count = gene_trialcounts.get(gs, 0)
-
-        ss = struct_stats.get(gs, {})
-        f_citation = _citation_component(pub_count, lmax)
-        g_clinical = _clinical_component(trial_count, cfg.pdis_clinical_target)
-        h_structure = _structure_component(
-            ss.get("avg_resolution"), ss.get("best_resolution")
+    if failures:
+        logger.warning(
+            "PDIS omitted %d genes whose live evidence could not be verified",
+            len(failures),
         )
-        patent_approx = ss.get("pdb_count", 0) * 2
-        m_patent = min(100.0, patent_approx / 5.0 * 10.0)
+    if not evidence:
+        raise RuntimeError("No genes had complete PubMed and ClinicalTrials.gov evidence")
 
-        pdis_total = (
-            cfg.pdis_w_citation * f_citation
-            + cfg.pdis_w_clinical * g_clinical
-            + cfg.pdis_w_structure * h_structure
-            + cfg.pdis_w_patent * m_patent
-        )
+    max_publications = max(counts[0] for counts in evidence.values())
+    max_compounds = max(compound_counts.values(), default=0)
+    weights = {
+        "citation": settings.rate.pdis_w_citation,
+        "clinical_trials": settings.rate.pdis_w_clinical,
+        "structure": settings.rate.pdis_w_structure,
+        "compound_diversity": settings.rate.pdis_w_compound_diversity,
+    }
+    weight_total = sum(weights.values())
+    retrieved_at = datetime.now(timezone.utc)
+    records: list[dict[str, Any]] = []
 
-        pdis_records.append({
-            "gene_symbol": gs,
-            "pdis_total": round(pdis_total, 2),
-            "components": {
-                "citation": round(f_citation, 2),
-                "clinical_trials": round(g_clinical, 2),
-                "structure": round(h_structure, 2),
-                "patent_proxy": round(m_patent, 2),
-            },
+    for gene, (publication_count, trial_count) in evidence.items():
+        structures = structure_stats.get(gene, {})
+        compound_count = compound_counts.get(gene, 0)
+        components = {
+            "citation": _log_component(publication_count, max_publications),
+            "clinical_trials": _clinical_component(
+                trial_count, settings.rate.pdis_clinical_target
+            ),
+            "structure": _structure_component(
+                structures.get("avg_resolution"), structures.get("best_resolution")
+            ),
+            "compound_diversity": _log_component(compound_count, max_compounds),
+        }
+        total = sum(weights[name] * value for name, value in components.items()) / weight_total
+        records.append({
+            "gene_symbol": gene,
+            "pdis_total": round(total, 2),
+            "components": {name: round(value, 2) for name, value in components.items()},
             "raw_values": {
-                "pub_count": pub_count,
-                "trial_count": trial_count,
-                "pdb_count": ss.get("pdb_count", 0),
-                "best_resolution": ss.get("best_resolution"),
+                "pubmed_publication_count": publication_count,
+                "clinical_trial_count": trial_count,
+                "pdb_count": int(structures.get("pdb_count", 0)),
+                "best_resolution_angstrom": structures.get("best_resolution"),
+                "average_resolution_angstrom": structures.get("avg_resolution"),
+                "distinct_compound_count": compound_count,
             },
+            "weights": weights,
+            "formula_version": FORMULA_VERSION,
             "source": "pdis_calculator",
+            "source_urls": {
+                "publications": f"{settings.api.ncbi_eutils_url}/esearch.fcgi",
+                "trials": "https://clinicaltrials.gov/api/v2/studies",
+                "structures": "https://www.rcsb.org/",
+                "compounds": settings.api.chembl_url,
+            },
+            "retrieved_at": retrieved_at,
         })
 
-    if pdis_records:
-        await batch_upsert(
-            COLLECTIONS["pdis"],
-            pdis_records,
-            key_fields=["gene_symbol"],
-            batch_size=500,
-        )
-    logger.info("PDIS calculation complete – %d scores stored", len(pdis_records))
-    return len(pdis_records)
+    await db[COLLECTIONS["pdis"]].delete_many({"source": "pdis_calculator"})
+    await batch_upsert(
+        COLLECTIONS["pdis"], records, key_fields=["gene_symbol"], batch_size=500
+    )
+    logger.info("Stored %d evidence-only PDIS scores", len(records))
+    return len(records)

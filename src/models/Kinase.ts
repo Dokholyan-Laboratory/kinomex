@@ -113,8 +113,7 @@ const PDISScoreSchema = new Schema(
     citation_component: { type: Number, required: true },
     clinical_component: { type: Number, required: true },
     structure_component: { type: Number, required: true },
-    patent_component: { type: Number, required: true },
-    fda_approval_status: { type: String, required: true },
+    compound_diversity_component: { type: Number },
   },
   { _id: false }
 );
@@ -136,7 +135,7 @@ const KinaseSchema = new Schema<IKinase>(
     full_name: { type: String, required: true },
     ec_number: { type: String },
     classification: { type: ClassificationSchema, required: true },
-    pdis_score: { type: PDISScoreSchema, required: true },
+    pdis_score: { type: PDISScoreSchema, required: false, default: null },
     pathways: [PathwaySchema],
     organ_systems_impacted: [{ type: String }],
     diseases_associated: [{ type: String }],
