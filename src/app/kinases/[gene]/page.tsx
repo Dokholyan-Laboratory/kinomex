@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { createPortal } from "react-dom";
 import TabPanel from "@/components/ui/TabPanel";
 import PDISBadge from "@/components/ui/PDISBadge";
