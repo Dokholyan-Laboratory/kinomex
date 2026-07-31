@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import ChatInterface from "@/components/chat/ChatInterface";
@@ -49,7 +49,7 @@ function ParsedFilterTag({ label, value }: { label: string; value: string }) {
   );
 }
 
-export default function SearchPage() {
+function SearchPageContent() {
   const searchParams = useSearchParams();
   const [mode, setMode] = useState<"search" | "chat">("search");
   const [query, setQuery] = useState(searchParams.get("q") || "");
@@ -552,6 +552,14 @@ export default function SearchPage() {
       )}
       </div>
     </div>
+  );
+}
+
+export default function SearchPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-kinome-navy flex items-center justify-center text-slate-400">Loading Search...</div>}>
+      <SearchPageContent />
+    </Suspense>
   );
 }
 

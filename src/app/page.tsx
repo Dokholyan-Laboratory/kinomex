@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import KinaseCard from "@/components/ui/KinaseCard";
@@ -101,7 +101,7 @@ function StatsSkeleton() {
   );
 }
 
-export default function HomePage() {
+function HomePageContent() {
   const searchParams = useSearchParams();
   const [stats, setStats] = useState<StatsData | null>(null);
   const [kinases, setKinases] = useState<KinaseListItem[]>([]);
@@ -339,5 +339,13 @@ export default function HomePage() {
         )}
       </section>
     </div>
+  );
+}
+
+export default function HomePage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-kinome-navy flex items-center justify-center text-slate-400">Loading KinomeX...</div>}>
+      <HomePageContent />
+    </Suspense>
   );
 }
