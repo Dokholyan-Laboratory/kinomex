@@ -5,7 +5,7 @@ import asyncio
 import logging
 import sys
 import time
-from typing import Sequence
+from typing import Any, Sequence
 
 from .config import settings
 from .database import connect, disconnect, ensure_indexes
@@ -57,7 +57,7 @@ def _resolve_order(requested: list[str]) -> list[str]:
         if step_name in requested:
             _visit(step_name)
 
-    return [s for s in resolved if s in requested]
+    return resolved
 
 
 # ---------------------------------------------------------------------------

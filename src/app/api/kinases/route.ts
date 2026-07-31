@@ -1,5 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
+import { resolveOrganGenes } from "@/lib/kinase-utils";
+import {
+  escapeRegExp,
+  isKinaseGroup,
+  isSafeSort,
+  parseFiniteNumber,
+} from "@/lib/api-validation";
 
 export const dynamic = "force-dynamic";
 
@@ -21,14 +28,26 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
 
-    const search = searchParams.get("search") || "";
-    const group = searchParams.get("group") || "";
-    const organ_system = searchParams.get("organ_system") || "";
-    const minPDIS = parseFloat(searchParams.get("minPDIS") || "0");
-    const maxPDIS = parseFloat(searchParams.get("maxPDIS") || "1");
-    const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
-    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") || "20", 10)));
+    const search = (searchParams.get("search") || "").trim();
+    const group = (searchParams.get("group") || "").trim();
+    const organ_system = (searchParams.get("organ_system") || "").trim();
+    const minPDIS = parseFiniteNumber(searchParams.get("minPDIS"), 0);
+    const maxPDIS = parseFiniteNumber(searchParams.get("maxPDIS"), 1);
+    const parsedPage = parseFiniteNumber(searchParams.get("page"), 1);
+    const parsedLimit = parseFiniteNumber(searchParams.get("limit"), 20);
     const sort = searchParams.get("sort") || "gene_symbol";
+
+    if (
+      search.length > 100 || organ_system.length > 50 || !isKinaseGroup(group) ||
+      minPDIS === null || maxPDIS === null || minPDIS < 0 || maxPDIS > 1 || minPDIS > maxPDIS ||
+      parsedPage === null || parsedLimit === null || !Number.isInteger(parsedPage) ||
+      !Number.isInteger(parsedLimit) || parsedPage < 1 || parsedLimit < 1 || !isSafeSort(sort)
+    ) {
+      return NextResponse.json({ error: "Invalid query parameters" }, { status: 400 });
+    }
+
+    const page = parsedPage;
+    const limit = Math.min(100, parsedLimit);
     const sortDir = sort.startsWith("-") ? -1 : 1;
     const sortField = sort.replace(/^-/, "");
 
@@ -44,9 +63,10 @@ export async function GET(request: NextRequest) {
     const matchStage: Record<string, unknown> = {};
 
     if (search) {
+      const escapedSearch = escapeRegExp(search);
       matchStage.$or = [
-        { gene_symbol: { $regex: search, $options: "i" } },
-        { full_name: { $regex: search, $options: "i" } },
+        { gene_symbol: { $regex: escapedSearch, $options: "i" } },
+        { full_name: { $regex: escapedSearch, $options: "i" } },
       ];
     }
 
@@ -54,26 +74,43 @@ export async function GET(request: NextRequest) {
       matchStage.group = group;
     }
 
-    // Resolve organ system filter from expression collection
-    let organGenes: string[] | null = null;
+    // Gene-level filters (organ system, PDIS range) are resolved to gene
+    // lists up-front so the total count and pagination only cover matches.
+    const geneConditions: Record<string, unknown>[] = [];
+
     if (organ_system) {
-      // Map common aliases to database values
-      const organAliases: Record<string, string> = {
-        nervous: "CNS", brain: "CNS", neuronal: "CNS", neural: "CNS",
-        skin: "Skin", dermal: "Skin", integumentary: "Skin",
-        hematopoietic: "Other", blood: "Other", haemato: "Other",
-      };
-      const resolvedOrgan = organAliases[organ_system.toLowerCase()] || organ_system;
-      const expDocs = await db.collection("expression").distinct("gene_symbol", {
-        organ_system: { $regex: resolvedOrgan, $options: "i" },
-      });
-      organGenes = (expDocs || []).filter(Boolean) as string[];
-      if (organGenes.length > 0) {
-        matchStage.gene_symbol = { $in: organGenes };
-      } else {
+      const organGenes = await resolveOrganGenes(db, organ_system);
+      if (organGenes.length === 0) {
         // No kinases match this organ system — return empty
         return NextResponse.json({ kinases: [], total: 0, page, totalPages: 0 });
       }
+      geneConditions.push({ gene_symbol: { $in: organGenes } });
+    }
+
+    if (minPDIS > 0 || maxPDIS < 1) {
+      // pdis collection stores scores on a 0-100 scale; resolve matching genes
+      // BEFORE pagination so totals and pages reflect only in-range kinases.
+      const minTotal = Math.round(minPDIS * 100);
+      const maxTotal = Math.round(maxPDIS * 100);
+      const pdisDocs = await db.collection("pdis")
+        .find({ pdis_total: { $gte: minTotal, $lte: maxTotal } })
+        .toArray();
+      const pdisGenes = new Set((pdisDocs.map((p) => p.gene_symbol)).filter(Boolean) as string[]);
+      if (minPDIS === 0) {
+        // Kinases without a PDIS record score 0 and fall inside [0, maxPDIS].
+        const allGenes = await db.collection("kinases").distinct("gene_symbol");
+        for (const g of allGenes) {
+          if (g && !pdisGenes.has(g)) pdisGenes.add(g);
+        }
+      }
+      if (pdisGenes.size === 0) {
+        return NextResponse.json({ kinases: [], total: 0, page, totalPages: 0 });
+      }
+      geneConditions.push({ gene_symbol: { $in: Array.from(pdisGenes) } });
+    }
+
+    if (geneConditions.length > 0) {
+      matchStage.$and = geneConditions;
     }
 
     // First get total count from kinases collection
@@ -95,6 +132,7 @@ export async function GET(request: NextRequest) {
     const [pdisDocs, varCounts, expDocs, diseaseDocs] = await Promise.all([
       db.collection("pdis").find({ gene_symbol: { $in: geneSymbols } }).toArray(),
       db.collection("variants").aggregate([
+        { $match: { gene_symbol: { $in: geneSymbols } } },
         { $group: { _id: "$gene_symbol", count: { $sum: 1 } } },
       ]).toArray().catch(() => []),
       db.collection("expression").aggregate([
@@ -127,15 +165,9 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    // Apply PDIS filter post-enrichment if needed
-    let filtered = enriched;
-    if (minPDIS > 0 || maxPDIS < 1) {
-      filtered = enriched.filter((k) => k.pdis_score >= minPDIS && k.pdis_score <= maxPDIS);
-    }
-
     const totalPages = Math.ceil(total / limit);
 
-    const response = { kinases: filtered, total, page, totalPages };
+    const response = { kinases: enriched, total, page, totalPages };
     if (total > 0) {
       setCache(cacheKey, response);
     }

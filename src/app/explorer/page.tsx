@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { motion } from "framer-motion";
 import KinaseCard from "@/components/ui/KinaseCard";
+import PDISHistogram, { type PDISBucket } from "@/components/visualizations/PDISHistogram";
 
 type GroupFilter = "All" | "AGC" | "CAMK" | "CK1" | "CMGC" | "STE" | "TK" | "TKL" | "Atypical";
 
@@ -95,6 +96,8 @@ export default function ExplorerPage() {
   const [activeOrgan, setActiveOrgan] = useState("All");
   const [minPdis, setMinPdis] = useState(0);
   const [maxPdis, setMaxPdis] = useState(1);
+  const [buckets, setBuckets] = useState<PDISBucket[]>([]);
+  const [distLoading, setDistLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
@@ -134,6 +137,28 @@ export default function ExplorerPage() {
     setPage(1);
     fetchKinases(1);
   }, [fetchKinases]);
+
+  const fetchDistribution = useCallback(async () => {
+    const params = new URLSearchParams();
+    if (search) params.set("search", search);
+    if (activeGroup !== "All") params.set("group", activeGroup);
+    if (activeOrgan !== "All") params.set("organ_system", activeOrgan);
+    setDistLoading(true);
+    try {
+      const res = await fetch(`/api/kinases/distribution?${params}`);
+      if (!res.ok) throw new Error("API unavailable");
+      const data = await res.json();
+      setBuckets(data.buckets || []);
+    } catch {
+      setBuckets([]);
+    } finally {
+      setDistLoading(false);
+    }
+  }, [search, activeGroup, activeOrgan]);
+
+  useEffect(() => {
+    fetchDistribution();
+  }, [fetchDistribution]);
 
   const groupBreakdown = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -203,8 +228,8 @@ export default function ExplorerPage() {
                 })}
               </div>
 
-              <div className="flex flex-col sm:flex-row gap-4">
-                <div className="flex-1">
+              <div className="flex flex-col gap-4">
+                <div>
                   <label className="text-xs text-slate-500 mb-1 block">Organ System</label>
                   <select
                     value={activeOrgan}
@@ -219,59 +244,16 @@ export default function ExplorerPage() {
                   </select>
                 </div>
 
-                <div className="flex-1">
-                  <label className="text-xs text-slate-500 mb-1 block">
-                    PDIS Range: <span className="text-kinome-cyan">{minPdis.toFixed(2)}</span> – <span className="text-kinome-violet">{maxPdis.toFixed(2)}</span>
-                  </label>
-                  <div className="flex items-center gap-3">
-                    <div className="flex-1">
-                      <label className="text-[10px] text-slate-600 mb-0.5 block">Min</label>
-                      <input
-                        type="range"
-                        min={0}
-                        max={1}
-                        step={0.01}
-                        value={minPdis}
-                        onChange={(e) => {
-                          const val = parseFloat(e.target.value);
-                          setMinPdis(val);
-                          if (val > maxPdis) setMaxPdis(val);
-                        }}
-                        className="w-full accent-kinome-cyan h-1.5"
-                      />
-                      <div className="flex justify-between text-[9px] text-slate-600 mt-0.5 px-0.5 select-none">
-                        <span>0</span>
-                        <span>0.25</span>
-                        <span>0.5</span>
-                        <span>0.75</span>
-                        <span>1</span>
-                      </div>
-                    </div>
-                    <div className="flex-1">
-                      <label className="text-[10px] text-slate-600 mb-0.5 block">Max</label>
-                      <input
-                        type="range"
-                        min={0}
-                        max={1}
-                        step={0.01}
-                        value={maxPdis}
-                        onChange={(e) => {
-                          const val = parseFloat(e.target.value);
-                          setMaxPdis(val);
-                          if (val < minPdis) setMinPdis(val);
-                        }}
-                        className="w-full accent-kinome-violet h-1.5"
-                      />
-                      <div className="flex justify-between text-[9px] text-slate-600 mt-0.5 px-0.5 select-none">
-                        <span>0</span>
-                        <span>0.25</span>
-                        <span>0.5</span>
-                        <span>0.75</span>
-                        <span>1</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                <PDISHistogram
+                  buckets={buckets}
+                  minPDIS={minPdis}
+                  maxPDIS={maxPdis}
+                  onChange={(min, max) => {
+                    setMinPdis(min);
+                    setMaxPdis(max);
+                  }}
+                  loading={distLoading}
+                />
               </div>
             </motion.div>
 

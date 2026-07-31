@@ -217,11 +217,19 @@ function HomePageContent() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4.26 10.147a60.438 60.438 0 0 0-.491 6.347A48.62 48.62 0 0 1 12 20.904a48.62 48.62 0 0 1 8.232-4.41 60.46 60.46 0 0 0-.491-6.347m-15.482 0a50.636 50.636 0 0 0-2.658-.813A59.906 59.906 0 0 1 12 3.493a59.903 59.903 0 0 1 10.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.717 50.717 0 0 1 12 13.489a50.702 50.702 0 0 1 7.74-3.342" />
               </svg>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-3">
               <h2 className="text-base font-semibold text-white">Welcome to KinomeX</h2>
-              <p className="text-sm text-slate-400 leading-relaxed">
-                Kinases are enzymes that phosphorylate proteins, regulating signaling pathways essential for cell growth, metabolism, and survival. This database provides a comprehensive collection of all human kinases, ranked by their <span className="text-kinome-cyan font-medium">Pharmaceutical Development Interest Score (PDIS)</span> — a composite metric integrating citation impact, clinical trial activity, structural coverage, and patent landscape. Explore all <span className="text-kinome-cyan font-medium">{stats?.totalKinases ?? "518"}</span> kinases through their sequences, structures, mutations, tissue expression, and disease associations. Search by gene name or group, and dive deep into each kinase&apos;s molecular profile.
+              <p className="text-sm text-slate-300 leading-relaxed max-w-5xl">
+                KinomeX is an integrated research server for exploring the human protein kinase landscape. It brings together curated evidence from <span className="text-white">UniProt, RCSB PDB, ChEMBL, PubChem, GTEx, ClinVar, PubMed, and ClinicalTrials.gov</span>, connecting kinase identity and classification with molecular structures, ligand bioactivity, tissue expression, pathogenic variants, and disease associations.
               </p>
+              <p className="text-sm text-slate-400 leading-relaxed max-w-5xl">
+                Browse <span className="text-kinome-cyan font-medium">{stats?.totalKinases ?? "500+"} human kinases</span>, compare kinase groups, inspect interactive structures and expression profiles, or search for genes, tissues, diseases, and therapeutic evidence. Each kinase is accompanied by a <span className="text-kinome-violet font-medium">Pharmaceutical Development Interest Score (PDIS)</span> that summarizes publication activity, clinical investigation, structural coverage, compound diversity, and approved-drug evidence. PDIS is intended as an exploration and prioritization aid—not a measure of biological importance or clinical recommendation.
+              </p>
+              <div className="flex flex-wrap gap-2 pt-1 text-[11px] font-medium text-slate-300">
+                <span className="rounded-full border border-cyan-400/15 bg-cyan-400/5 px-3 py-1">Integrated public data</span>
+                <span className="rounded-full border border-violet-400/15 bg-violet-400/5 px-3 py-1">Interactive molecular profiles</span>
+                <span className="rounded-full border border-emerald-400/15 bg-emerald-400/5 px-3 py-1">Evidence-based prioritization</span>
+              </div>
             </div>
           </div>
         </motion.div>

@@ -1,0 +1,72 @@
+#!/bin/bash
+set -u
+
+KINOMEX_DIR="$(cd "$(dirname "$0")" && pwd)"
+ACTION="start"
+
+if [ "${1:-}" = "-s" ]; then
+  ACTION="stop"
+  PORT="${2:-3007}"
+else
+  PORT="${1:-3007}"
+fi
+
+if ! [[ "$PORT" =~ ^[0-9]+$ ]] || [ "$PORT" -lt 1 ] || [ "$PORT" -gt 65535 ]; then
+  echo "Usage: ./run [port] | ./run -s [port]" >&2
+  exit 2
+fi
+
+stop_kinomex() {
+  local found=0
+  local pid
+  local process_cwd
+
+  while IFS= read -r pid; do
+    [ -n "$pid" ] || continue
+    process_cwd="$(lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p')"
+    if [ "$process_cwd" != "$KINOMEX_DIR" ]; then
+      echo "Refusing to stop PID $pid on port $PORT: it is not running from KinomeX." >&2
+      continue
+    fi
+    found=1
+    echo "Stopping KinomeX PID $pid on port $PORT..."
+    kill -TERM "$pid"
+  done < <(lsof -tiTCP:"$PORT" -sTCP:LISTEN 2>/dev/null | sort -u)
+
+  if [ "$found" -eq 0 ]; then
+    echo "No KinomeX server is listening on port $PORT."
+  fi
+}
+
+if [ "$ACTION" = "stop" ]; then
+  stop_kinomex
+  exit 0
+fi
+
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "python3 is required to populate the KinomeX database." >&2
+  exit 1
+fi
+
+if ! command -v npm >/dev/null 2>&1; then
+  echo "npm is required to start KinomeX." >&2
+  exit 1
+fi
+
+cd "$KINOMEX_DIR" || exit 1
+ETL_LOG="$KINOMEX_DIR/etl/auto_populate.log"
+
+python3 -m etl.auto_populate >"$ETL_LOG" 2>&1 &
+ETL_PID=$!
+echo "Database population check started (PID $ETL_PID; log: $ETL_LOG)."
+
+cleanup() {
+  if kill -0 "$ETL_PID" 2>/dev/null; then
+    kill -TERM "$ETL_PID" 2>/dev/null || true
+  fi
+}
+trap cleanup EXIT INT TERM
+
+npm run dev -- -p "$PORT"
+APP_STATUS=$?
+exit "$APP_STATUS"

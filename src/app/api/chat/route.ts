@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import OpenAI from "openai";
 import { connectToDatabase } from "@/lib/mongodb";
+import { escapeRegExp, validateChatMessages } from "@/lib/api-validation";
 
 const client = new OpenAI({
   apiKey: process.env.LLM_API_KEY || "sk-placeholder",
@@ -136,8 +137,8 @@ async function fetchKinaseContext(
   if (meaningfulTerms.length) {
     const orConditions = meaningfulTerms.map((t) => ({
       $or: [
-        { gene_symbol: { $regex: t, $options: "i" } },
-        { full_name: { $regex: t, $options: "i" } },
+        { gene_symbol: { $regex: escapeRegExp(t), $options: "i" } },
+        { full_name: { $regex: escapeRegExp(t), $options: "i" } },
       ],
     }));
     match.$and = orConditions;
@@ -170,7 +171,7 @@ async function fetchKinaseContext(
   if (!kinases?.length && hasDiseaseQuery && !meaningfulTerms.length) {
     const diseaseWords = lowerQuery.match(/\b(glioblastoma|breast\s+cancer|lung\s+cancer|colorectal\s+cancer|melanoma|leukemia|lymphoma|diabetes|alzheimer|parkinson)\b/g);
     if (diseaseWords) {
-      const diseaseName = diseaseWords[0];
+      const diseaseName = escapeRegExp(diseaseWords[0]);
       const diseaseDocs = await db.collection("diseases")
         .find({ "diseases.description": { $regex: diseaseName, $options: "i" } })
         .limit(15)
@@ -223,11 +224,15 @@ export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { messages } = body;
+    const body: unknown = await request.json();
+    const messages = validateChatMessages(
+      typeof body === "object" && body !== null && "messages" in body
+        ? body.messages
+        : undefined
+    );
 
-    if (!messages || !Array.isArray(messages) || messages.length === 0) {
-      return new Response(JSON.stringify({ error: "messages array is required" }), {
+    if (!messages) {
+      return new Response(JSON.stringify({ error: "Invalid messages payload" }), {
         status: 400,
         headers: { "Content-Type": "application/json" },
       });
@@ -244,7 +249,7 @@ export async function POST(request: NextRequest) {
 
     const lastUserMsg = [...messages]
       .reverse()
-      .find((m: { role: string }) => m.role === "user");
+      .find((m) => m.role === "user");
 
     let context: Record<string, unknown>[] = [];
     if (lastUserMsg) {
@@ -257,7 +262,7 @@ export async function POST(request: NextRequest) {
         console.error("POST /api/chat db error:", dbErr);
         return new Response(
           JSON.stringify({
-            error: `Database error: ${dbErr instanceof Error ? dbErr.message : String(dbErr)}`,
+            error: "Kinase context is temporarily unavailable",
           }),
           { status: 503, headers: { "Content-Type": "application/json" } }
         );
@@ -268,8 +273,8 @@ export async function POST(request: NextRequest) {
 
     const openaiMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
       { role: "system", content: systemMessage },
-      ...messages.map((m: { role: string; content: string }) => ({
-        role: m.role as "user" | "assistant",
+      ...messages.map((m) => ({
+        role: m.role,
         content: m.content,
       })),
     ];
@@ -285,9 +290,8 @@ export async function POST(request: NextRequest) {
       });
     } catch (llmErr) {
       console.error("POST /api/chat LLM error:", llmErr);
-      const message = llmErr instanceof Error ? llmErr.message : String(llmErr);
       return new Response(
-        JSON.stringify({ error: `LLM API error: ${message}` }),
+        JSON.stringify({ error: "Language model service is temporarily unavailable" }),
         { status: 502, headers: { "Content-Type": "application/json" } }
       );
     }
@@ -325,8 +329,7 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     console.error("POST /api/chat error:", error);
-    const message = error instanceof Error ? error.message : String(error);
-    return new Response(JSON.stringify({ error: `Chat failed: ${message}` }), {
+    return new Response(JSON.stringify({ error: "Chat request failed" }), {
       status: 500,
       headers: { "Content-Type": "application/json" },
     });

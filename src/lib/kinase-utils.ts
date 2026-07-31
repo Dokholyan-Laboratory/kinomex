@@ -1,3 +1,6 @@
+import type { Db } from "mongodb";
+import { escapeRegExp } from "@/lib/api-validation";
+
 export function getScoreColor(score: number): string {
   if (score >= 0.45) return "#34d399";
   if (score >= 0.25) return "#38bdf8";
@@ -52,4 +55,18 @@ export function deriveGroup(keywords: string[]): string {
   if (kw.some((k) => k.includes("serine/threonine-protein kinase"))) return "CMGC";
   if (kw.some((k) => k.includes("kinase"))) return "Atypical";
   return "Atypical";
+}
+
+const ORGAN_ALIASES: Record<string, string> = {
+  nervous: "CNS", brain: "CNS", neuronal: "CNS", neural: "CNS",
+  skin: "Skin", dermal: "Skin", integumentary: "Skin",
+  hematopoietic: "Other", blood: "Other", haemato: "Other",
+};
+
+export async function resolveOrganGenes(db: Db, organSystem: string): Promise<string[]> {
+  const resolvedOrgan = ORGAN_ALIASES[organSystem.toLowerCase()] || organSystem;
+  const expDocs = await db.collection("expression").distinct("gene_symbol", {
+    organ_system: { $regex: escapeRegExp(resolvedOrgan), $options: "i" },
+  });
+  return (expDocs || []).filter((g): g is string => Boolean(g));
 }

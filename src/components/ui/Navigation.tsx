@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -43,66 +44,14 @@ export default function Navigation() {
           {/* Logo */}
           <div className="flex items-center gap-2">
             <Link href="/" className="flex-shrink-0" onClick={closeMobile}>
-              <svg
-                width="32"
-                height="32"
-                viewBox="0 0 64 64"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <defs>
-                  <linearGradient id="kinomex-bg" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#38bdf8" />
-                    <stop offset="100%" stopColor="#a855f7" />
-                  </linearGradient>
-                  <linearGradient id="x-cyan" x1="0" y1="0" x2="1" y2="1">
-                    <stop offset="0%" stopColor="#38bdf8" />
-                    <stop offset="100%" stopColor="#2dd4bf" />
-                  </linearGradient>
-                  <linearGradient id="x-violet" x1="1" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#a855f7" />
-                    <stop offset="100%" stopColor="#e879f9" />
-                  </linearGradient>
-                </defs>
-                {/* Kinome tree outer ring */}
-                <circle cx="32" cy="32" r="27" stroke="url(#kinomex-bg)" strokeWidth="1.5" opacity="0.5" fill="none" />
-                <circle cx="32" cy="32" r="23" stroke="url(#kinomex-bg)" strokeWidth="0.5" opacity="0.3" strokeDasharray="2.5 4" fill="none" />
-                {/* Tree branch arcs - 8 kinase groups */}
-                {[0, 45, 90, 135, 180, 225, 270, 315].map((angle) => {
-                  const rad = (angle * Math.PI) / 180;
-                  const x1 = 32 + 23 * Math.cos(rad);
-                  const y1 = 32 + 23 * Math.sin(rad);
-                  const x2 = 32 + 28 * Math.cos(rad);
-                  const y2 = 32 + 28 * Math.sin(rad);
-                  return (
-                    <g key={angle}>
-                      <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="url(#kinomex-bg)" strokeWidth="1.8" strokeLinecap="round" opacity="0.5" />
-                      <circle cx={x2} cy={y2} r="1.5" fill="url(#kinomex-bg)" opacity="0.4" />
-                    </g>
-                  );
-                })}
-                {/* X mark */}
-                <path d="M16 16L48 48" stroke="url(#x-cyan)" strokeWidth="5.5" strokeLinecap="round" />
-                <path d="M48 16L16 48" stroke="url(#x-violet)" strokeWidth="5.5" strokeLinecap="round" />
-                {/* Glassmorphism PDB card at center */}
-                <g>
-                  {/* Glass background */}
-                  <rect x="20" y="20" width="24" height="24" rx="6" fill="white" opacity="0.08" stroke="white" strokeWidth="0.8" strokeOpacity="0.15" />
-                  {/* Glass highlight */}
-                  <rect x="20" y="20" width="24" height="10" rx="6" fill="white" opacity="0.06" />
-                  {/* Glass shadow */}
-                  <rect x="20" y="20" width="24" height="24" rx="6" fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="2" />
-                  {/* PDB ribbon - beta sheet arrows */}
-                  <path d="M24 27L28 27L28 29L24.5 29" stroke="white" strokeWidth="1.3" fill="none" opacity="0.8" strokeLinejoin="round" />
-                  <path d="M24 32L29 32L29 34L24.5 34" stroke="white" strokeWidth="1.3" fill="none" opacity="0.6" strokeLinejoin="round" />
-                  {/* PDB ribbon - alpha helix coil */}
-                  <path d="M33 26Q36 26 35 29Q34 32 37 32" stroke="white" strokeWidth="1.3" fill="none" opacity="0.8" />
-                  <path d="M33 35Q36 35 35 38Q34 41 37 41" stroke="white" strokeWidth="1.3" fill="none" opacity="0.6" />
-                  {/* PDB ribbon - connecting loop */}
-                  <path d="M29 28Q31 25 33 26" stroke="white" strokeWidth="0.8" fill="none" opacity="0.5" />
-                  <path d="M29 33Q31 30 33 35" stroke="white" strokeWidth="0.8" fill="none" opacity="0.4" />
-                </g>
-              </svg>
+              <Image
+                src="/icons/kinomex-ribbon.png"
+                alt="KinomeX"
+                width={40}
+                height={40}
+                priority
+                className="h-10 w-10 object-contain drop-shadow-[0_0_8px_rgba(56,189,248,0.35)]"
+              />
             </Link>
             <div className="flex flex-col leading-none">
               <Link href="/" onClick={closeMobile}>

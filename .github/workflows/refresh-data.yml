@@ -1,0 +1,65 @@
+name: Refresh KinomeX source data
+
+on:
+  schedule:
+    # Every Sunday at 03:17 UTC. The non-round minute reduces runner congestion.
+    - cron: "17 3 * * 0"
+  workflow_dispatch:
+    inputs:
+      steps:
+        description: "Optional space-separated ETL targets (blank runs all sources)"
+        required: false
+        type: string
+
+concurrency:
+  group: kinomex-source-refresh
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      MONGODB_URI: ${{ secrets.KINOMEX_MONGODB_URI }}
+      PUBMED_API_KEY: ${{ secrets.PUBMED_API_KEY }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: etl/requirements.txt
+
+      - name: Install ETL dependencies
+        run: python -m pip install --requirement etl/requirements.txt
+
+      - name: Verify database configuration
+        run: |
+          if [ -z "$MONGODB_URI" ]; then
+            echo "Repository secret KINOMEX_MONGODB_URI is required" >&2
+            exit 1
+          fi
+
+      - name: Refresh upstream sources
+        env:
+          REQUESTED_STEPS: ${{ inputs.steps }}
+        run: |
+          if [ -n "$REQUESTED_STEPS" ]; then
+            read -r -a TARGETS <<< "$REQUESTED_STEPS"
+            for target in "${TARGETS[@]}"; do
+              case "$target" in
+                uniprot|pdb|chembl|pubchem|gtex|clinvar|diseases|pdis) ;;
+                *) echo "Unknown ETL target: $target" >&2; exit 2 ;;
+              esac
+            done
+            python -m etl.scheduled_update "${TARGETS[@]}"
+          else
+            python -m etl.scheduled_update
+          fi

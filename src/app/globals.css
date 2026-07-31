@@ -34,67 +34,85 @@ body {
   overflow-x: hidden;
 }
 
-body::before {
-  content: "";
+.biomedical-background {
   position: fixed;
   inset: 0;
-  z-index: -1;
-  background: transparent;
-  animation: gradient-drift 20s ease-in-out infinite alternate;
+  z-index: 0;
+  overflow: hidden;
   pointer-events: none;
+  background: #020612;
 }
 
-@keyframes gradient-drift {
+.biomedical-background__art,
+.biomedical-background__atmosphere,
+.biomedical-background__vignette {
+  position: absolute;
+  inset: -3%;
+}
+
+.biomedical-background__art {
+  background-image: url("/images/kinomex-biomedical-background.png");
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  animation: biomedical-drift 30s ease-in-out infinite alternate;
+  will-change: transform, filter;
+}
+
+.biomedical-background__atmosphere {
+  inset: -15%;
+  background:
+    radial-gradient(circle at 12% 14%, rgba(14, 165, 233, 0.2), transparent 27%),
+    radial-gradient(circle at 88% 18%, rgba(124, 58, 237, 0.18), transparent 29%),
+    radial-gradient(circle at 80% 88%, rgba(6, 182, 212, 0.16), transparent 27%),
+    radial-gradient(circle at 13% 86%, rgba(109, 40, 217, 0.16), transparent 28%);
+  mix-blend-mode: screen;
+  opacity: 0.55;
+  filter: blur(10px);
+  animation: biomedical-breathe 10s ease-in-out infinite alternate;
+  will-change: transform, opacity, filter;
+}
+
+.biomedical-background__vignette {
+  inset: 0;
+  background:
+    radial-gradient(ellipse at center, transparent 32%, rgba(1, 4, 14, 0.26) 100%),
+    linear-gradient(to bottom, rgba(1, 5, 18, 0.04), rgba(1, 5, 18, 0.18));
+}
+
+@keyframes biomedical-drift {
   0% {
-    background: radial-gradient(
-        ellipse 80% 50% at 20% 20%,
-        rgba(56, 189, 248, 0.08) 0%,
-        transparent 60%
-      ),
-      radial-gradient(
-        ellipse 60% 40% at 80% 80%,
-        rgba(168, 85, 247, 0.06) 0%,
-        transparent 60%
-      ),
-      radial-gradient(
-        ellipse 50% 60% at 50% 50%,
-        rgba(52, 211, 153, 0.04) 0%,
-        transparent 60%
-      );
+    transform: scale(1.035) translate3d(-0.35%, -0.2%, 0);
+    filter: saturate(0.96) brightness(0.97);
   }
   50% {
-    background: radial-gradient(
-        ellipse 70% 60% at 40% 30%,
-        rgba(168, 85, 247, 0.08) 0%,
-        transparent 60%
-      ),
-      radial-gradient(
-        ellipse 50% 50% at 60% 70%,
-        rgba(56, 189, 248, 0.06) 0%,
-        transparent 60%
-      ),
-      radial-gradient(
-        ellipse 60% 50% at 30% 60%,
-        rgba(52, 211, 153, 0.04) 0%,
-        transparent 60%
-      );
+    transform: scale(1.055) translate3d(0.25%, 0.15%, 0);
+    filter: saturate(1.08) brightness(1.045);
   }
   100% {
-    background: radial-gradient(
-        ellipse 60% 50% at 70% 40%,
-        rgba(52, 211, 153, 0.08) 0%,
-        transparent 60%
-      ),
-      radial-gradient(
-        ellipse 50% 60% at 30% 70%,
-        rgba(168, 85, 247, 0.06) 0%,
-        transparent 60%
-      ),
-      radial-gradient(
-        ellipse 80% 40% at 50% 30%,
-        rgba(56, 189, 248, 0.04) 0%,
-        transparent 60%
-      );
+    transform: scale(1.04) translate3d(0.45%, -0.25%, 0);
+    filter: saturate(0.98) brightness(0.98);
+  }
+}
+
+@keyframes biomedical-breathe {
+  from {
+    transform: translate3d(-1%, 0.5%, 0) scale(1);
+    opacity: 0.4;
+    filter: blur(12px) brightness(0.9);
+  }
+  to {
+    transform: translate3d(1%, -0.5%, 0) scale(1.03);
+    opacity: 0.78;
+    filter: blur(8px) brightness(1.18);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .biomedical-background__art,
+  .biomedical-background__atmosphere {
+    animation: none;
+    transform: none;
   }
 }
 
